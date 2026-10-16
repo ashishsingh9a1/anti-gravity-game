@@ -1,0 +1,12 @@
+{
+  "name": "anti-gravity-overdrive",
+  "version": "1.0.0",
+  "description": "Neon Cyberpunk Rogue-lite Action Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["game", "roguelite", "anti-gravity", "arcade"],
+  "author": "ashishsingh9a1",
+  "license": "MIT"
+}
