@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ANTI-GRAVITY // OVERDRIVE - Rogue-lite Arcade Shooter</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="game-container">
+    <!-- Main Render Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- CRT & Vignette FX Overlay -->
+    <div class="scanline-overlay"></div>
+
+    <!-- Boss Incoming Banner -->
+    <div id="boss-warning" class="boss-banner">
+      ⚠ GRAVITATIONAL ANOMALY DETECTED // BOSS INCOMING ⚠
+    </div>
+
+    <!-- Dynamic In-Game HUD -->
+    <div id="ui-layer">
+      <!-- XP Progress Bar along top -->
+      <div class="xp-bar-container">
+        <div id="xp-fill" class="xp-bar-fill"></div>
+      </div>
+
+      <!-- Top HUD Elements -->
+      <div class="hud-top">
+        <div class="hud-left">
+          <!-- HP Bar -->
+          <div class="bar-container">
+            <span class="bar-label" style="color: #ff3366;">HULL</span>
+            <div class="bar-track">
+              <div id="hp-fill" class="bar-fill hp" style="width: 100%;"></div>
+            </div>
+            <span id="hp-val" class="bar-val">100 / 100</span>
+          </div>
+
+          <!-- Shield Bar -->
+          <div class="bar-container">
+            <span class="bar-label" style="color: #00f3ff;">SHIELD</span>
+            <div class="bar-track">
+              <div id="shield-fill" class="bar-fill shield" style="width: 100%;"></div>
+            </div>
+            <span id="shield-val" class="bar-val">50 / 50</span>
+          </div>
+
+          <!-- Anti-Grav Pulse Cooldown Bar -->
+          <div class="bar-container">
+            <span class="bar-label" style="color: #bc13fe;">PULSE</span>
+            <div class="bar-track">
+              <div id="pulse-fill" class="bar-fill pulse" style="width: 100%;"></div>
+            </div>
+            <span id="pulse-val" class="bar-val">READY</span>
+          </div>
+        </div>
+
+        <div class="hud-center">
+          <div class="level-badge">
+            <span>LVL</span>
+            <span id="hud-level">1</span>
+          </div>
+          <div class="wave-display">
+            <div id="wave-title" class="wave-title">WAVE 1</div>
+            <div id="wave-timer" class="wave-timer">00:00</div>
+          </div>
+        </div>
+
+        <div class="hud-right">
+          <div class="score-box">
+            <div id="hud-score" class="score-num">000000</div>
+            <div id="hud-multiplier" class="multiplier-tag">1.0x MULTIPLIER</div>
+          </div>
+          <div class="settings-bar" style="margin-top: 6px;">
+            <button id="btn-sound-toggle" class="icon-btn" title="Toggle Sound">🔊</button>
+            <button id="btn-pause-toggle" class="icon-btn" title="Pause Game (ESC / P)">⏸</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom HUD Elements -->
+      <div class="hud-bottom">
+        <div class="hud-left">
+          <div style="font-size: 11px; color: #8892b0; letter-spacing: 1px; margin-bottom: 4px;">ACTIVE ARSENAL</div>
+          <div id="active-weapons-tray" class="active-weapons">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <div class="hud-center">
+          <div class="control-hints">
+            [WASD] MOVE &nbsp;|&nbsp; [MOUSE] AIM / AUTO-FIRE &nbsp;|&nbsp; [SPACE / R-CLICK] GRAV PULSE &nbsp;|&nbsp; [SHIFT] DASH
+          </div>
+        </div>
+
+        <div class="hud-right">
+          <div class="ability-slots">
+            <div class="ability-slot">
+              <span class="ability-key">SPACE / R-CLK</span>
+              <span class="ability-icon">🌀</span>
+              <span class="ability-name">PULSE</span>
+              <span id="slot-pulse-status" class="ability-status">READY</span>
+            </div>
+            <div class="ability-slot">
+              <span class="ability-key">SHIFT</span>
+              <span class="ability-icon">⚡</span>
+              <span class="ability-name">PHASE DASH</span>
+              <span id="slot-dash-status" class="ability-status">READY</span>
+            </div>
+            <div class="ability-slot" id="slot-singularity-box" style="display: none;">
+              <span class="ability-key">Q / E</span>
+              <span class="ability-icon">🕳</span>
+              <span class="ability-name">VORTEX</span>
+              <span id="slot-singularity-status" class="ability-status">READY</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Virtual Touch Controls (Visible on mobile/touch screens) -->
+    <div id="touch-controls" class="touch-controls">
+      <div id="touch-move" class="touch-stick-zone">
+        <div id="touch-move-knob" class="touch-stick-knob"></div>
+      </div>
+      <div id="touch-aim" class="touch-stick-zone">
+        <div id="touch-aim-knob" class="touch-stick-knob"></div>
+      </div>
+      <div id="touch-pulse-btn" class="touch-action-btn" title="Grav Pulse">🌀</div>
+      <div id="touch-dash-btn" class="touch-action-btn" style="bottom: 285px; background: linear-gradient(135deg, #00f3ff, #bc13fe);" title="Phase Dash">⚡</div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="menu-screen" class="overlay-screen">
+      <div class="title-container">
+        <div class="game-title-sub">NEO-COSMOS ROGUELITE ARENA</div>
+        <h1 class="game-title">ANTI-GRAVITY // OVERDRIVE</h1>
+        <p class="game-subtitle">HARNESS GRAVITATIONAL FORCES &bull; OBLITERATE THE SWARM &bull; EVOLVE YOUR CRAFT</p>
+      </div>
+
+      <!-- Ship Selection Cards -->
+      <div class="ship-selection-container">
+        <!-- Ship 1: Apex Striker -->
+        <div class="ship-card selected" data-ship="apex">
+          <canvas class="ship-preview" id="preview-apex" width="80" height="80"></canvas>
+          <div class="ship-name">APEX STRIKER</div>
+          <div class="ship-archetype">BALANCED ASSAULT</div>
+          <div class="ship-stats">
+            <div class="ship-stat-row"><span>Speed</span><span style="color:var(--green)">★★★★☆</span></div>
+            <div class="ship-stat-row"><span>Firepower</span><span style="color:var(--green)">★★★★☆</span></div>
+            <div class="ship-stat-row"><span>Shields</span><span style="color:var(--green)">★★★☆☆</span></div>
+          </div>
+          <div class="ship-trait">★ Extended Pulse Shockwave + 15% Crit Rate</div>
+        </div>
+
+        <!-- Ship 2: Vortex Interceptor -->
+        <div class="ship-card" data-ship="vortex">
+          <canvas class="ship-preview" id="preview-vortex" width="80" height="80"></canvas>
+          <div class="ship-name">VORTEX SPECTRE</div>
+          <div class="ship-archetype">GRAVITON ANOMALY</div>
+          <div class="ship-stats">
+            <div class="ship-stat-row"><span>Speed</span><span style="color:var(--green)">★★★★★</span></div>
+            <div class="ship-stat-row"><span>Firepower</span><span style="color:var(--green)">★★★☆☆</span></div>
+            <div class="ship-stat-row"><span>Shields</span><span style="color:var(--secondary)">★★☆☆☆</span></div>
+          </div>
+          <div class="ship-trait">★ Starts with Singularity Well + Hyper Dash</div>
+        </div>
+
+        <!-- Ship 3: Aegis Bastion -->
+        <div class="ship-card" data-ship="aegis">
+          <canvas class="ship-preview" id="preview-aegis" width="80" height="80"></canvas>
+          <div class="ship-name">AEGIS BASTION</div>
+          <div class="ship-archetype">HEAVY DREADNOUGHT</div>
+          <div class="ship-stats">
+            <div class="ship-stat-row"><span>Speed</span><span style="color:var(--secondary)">★★☆☆☆</span></div>
+            <div class="ship-stat-row"><span>Firepower</span><span style="color:var(--green)">★★★★★</span></div>
+            <div class="ship-stat-row"><span>Shields</span><span style="color:var(--green)">★★★★★</span></div>
+          </div>
+          <div class="ship-trait">★ Dual Orbital Plasma Moons + Kinetic Armor</div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="menu-actions">
+        <button id="btn-start-game" class="cyber-btn">LAUNCH MISSION ▶</button>
+        <button id="btn-how-to-play" class="cyber-btn btn-secondary">MISSION BRIEFING 📖</button>
+      </div>
+
+      <!-- High Score Banner -->
+      <div class="high-score-banner">
+        <span>BEST SCORE: <b id="menu-high-score">0</b></span>
+        <span>HIGHEST WAVE: <b id="menu-highest-wave">Wave 1</b></span>
+        <span>SWARM DEFEATED: <b id="menu-total-kills">0</b></span>
+      </div>
+    </div>
+
+    <!-- HOW TO PLAY MODAL -->
+    <div id="instructions-modal" class="overlay-screen hidden">
+      <div class="instructions-panel">
+        <h2 style="font-size: 26px; color: var(--primary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">
+          FLIGHT & COMBAT PROTOCOLS
+        </h2>
+        <p style="color: #cbd5e1; font-size: 14px; line-height: 1.5;">
+          You are the lone survivor in deep anomaly space. Hostile graviton entities will swarm you in escalating waves. Collect Grav-Crystals to evolve your ship with game-breaking upgrades.
+        </p>
+
+        <div class="instructions-grid">
+          <div class="instruction-item">
+            <span class="instruction-key">W A S D</span>
+            <span>Thruster movement with inertia & vector drift.</span>
+          </div>
+          <div class="instruction-item">
+            <span class="instruction-key">MOUSE</span>
+            <span>Aim direction. Primary weapon fires automatically.</span>
+          </div>
+          <div class="instruction-item">
+            <span class="instruction-key">SPACE / R-CLICK</span>
+            <span><b>ANTI-GRAVITY PULSE:</b> Deflects incoming bullets into enemy homing missiles, blasts swarms back, and vacuums all XP crystals!</span>
+          </div>
+          <div class="instruction-item">
+            <span class="instruction-key">L-SHIFT</span>
+            <span><b>PHASE DASH:</b> Teleport forward with invulnerability frames and trail explosions.</span>
+          </div>
+          <div class="instruction-item">
+            <span class="instruction-key">P / ESC</span>
+            <span>Pause flight simulation and adjust audio volume.</span>
+          </div>
+          <div class="instruction-item">
+            <span class="instruction-key">GRAV CORES</span>
+            <span>Defeat elite enemies and Leviathan bosses every 5 waves for legendary upgrades!</span>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 25px;">
+          <button id="btn-close-instructions" class="cyber-btn" style="font-size: 16px; padding: 10px 30px;">UNDERSTOOD</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEVEL UP / UPGRADE SELECTION MODAL -->
+    <div id="upgrade-screen" class="overlay-screen hidden">
+      <div class="upgrade-modal-title">QUANTUM RESONANCE DETECTED</div>
+      <div class="upgrade-modal-subtitle">SELECT A NEURAL SHIP AUGMENTATION TO INTEGRATE</div>
+
+      <div id="upgrade-cards-container" class="upgrade-cards-container">
+        <!-- Rendered dynamically by upgrades.js -->
+      </div>
+    </div>
+
+    <!-- PAUSE MENU MODAL -->
+    <div id="pause-screen" class="overlay-screen hidden">
+      <h2 class="pause-title">MISSION SUSPENDED</h2>
+      <div style="display: flex; flex-direction: column; gap: 15px; width: 280px; margin-bottom: 20px;">
+        <button id="btn-resume-game" class="cyber-btn">RESUME ▶</button>
+        <button id="btn-restart-game" class="cyber-btn btn-secondary">RESTART SIMULATION 🔄</button>
+        <button id="btn-quit-menu" class="cyber-btn btn-secondary">ABORT TO HANGAR ⏹</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; width: 280px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 8px;">
+        <label style="font-size: 13px; color: #8892b0; display: flex; justify-content: space-between;">
+          <span>AUDIO FX & SYNTHS</span>
+          <input type="range" id="slider-volume" min="0" max="1" step="0.05" value="0.7" style="width: 120px;">
+        </label>
+      </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="gameover-screen" class="overlay-screen hidden">
+      <h1 class="gameover-title">HULL DESTROYED</h1>
+      <div style="font-size: 16px; color: #8892b0; letter-spacing: 2px;">YOUR CONSCIOUSNESS COLLAPSED INTO THE SINGULARITY</div>
+
+      <div class="gameover-stats-grid">
+        <div class="stat-item">
+          <span class="stat-item-label">TOTAL SCORE</span>
+          <span id="stat-final-score" class="stat-item-val" style="color: var(--accent);">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item-label">WAVES SURVIVED</span>
+          <span id="stat-final-wave" class="stat-item-val" style="color: var(--primary);">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item-label">SWARM ENTITIES KILLED</span>
+          <span id="stat-final-kills" class="stat-item-val">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item-label">DAMAGE DEALT</span>
+          <span id="stat-final-damage" class="stat-item-val">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item-label">MAX COMBO STREAK</span>
+          <span id="stat-final-combo" class="stat-item-val" style="color: var(--secondary);">x1.0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item-label">SURVIVAL TIME</span>
+          <span id="stat-final-time" class="stat-item-val">00:00</span>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button id="btn-play-again" class="cyber-btn">REDEPLOY SHIP 🚀</button>
+        <button id="btn-gameover-menu" class="cyber-btn btn-secondary">RETURN TO HANGAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Engine Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/upgrades.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

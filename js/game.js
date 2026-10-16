@@ -1,0 +1,788 @@
+/**
+ * ANTI-GRAVITY // OVERDRIVE - Master Game Engine
+ * Wave director, collision solver, state machine, input processing, and UI coordinator.
+ */
+
+class GameEngine {
+  constructor() {
+    this.canvas = document.getElementById('game-canvas');
+    this.ctx = this.canvas.getContext('2d');
+
+    // State
+    this.state = 'MENU'; // 'MENU', 'PLAYING', 'PAUSED', 'LEVEL_UP', 'GAME_OVER'
+    this.selectedShip = 'apex';
+    this.lastTime = performance.now();
+
+    // Core Systems
+    this.cameraShake = new CameraShake();
+    this.fx = new FXManager(this.canvas);
+    this.upgrades = new UpgradeSystem();
+
+    // Entities
+    this.player = null;
+    this.projectiles = [];
+    this.enemies = [];
+    this.singularities = [];
+    this.crystals = [];
+
+    // Session Stats
+    this.score = 0;
+    this.combo = 1.0;
+    this.comboTimer = 0;
+    this.maxCombo = 1.0;
+    this.kills = 0;
+    this.totalDamageDealt = 0;
+    this.gameTime = 0;
+
+    // Wave Director
+    this.currentWave = 1;
+    this.waveTimer = 45; // 45 seconds per wave
+    this.spawnTimer = 0;
+    this.spawnInterval = 1.6;
+    this.isBossActive = false;
+    this.activeBoss = null;
+
+    // Input State
+    this.input = {
+      keys: {},
+      mouseX: window.innerWidth / 2,
+      mouseY: window.innerHeight / 2,
+      isMouseDown: false,
+      touchMove: { x: 0, y: 0 }
+    };
+
+    // High Scores
+    this.highScore = parseInt(localStorage.getItem('anti_gravity_high_score') || '0', 10);
+    this.highestWave = parseInt(localStorage.getItem('anti_gravity_highest_wave') || '1', 10);
+    this.totalKillsSaved = parseInt(localStorage.getItem('anti_gravity_total_kills') || '0', 10);
+
+    this.initWindow();
+    this.initInputs();
+    this.initUI();
+    this.renderShipPreviews();
+    this.updateMenuStats();
+
+    // Start Animation Loop
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  initWindow() {
+    const resize = () => {
+      this.canvas.width = window.innerWidth;
+      this.canvas.height = window.innerHeight;
+      if (this.fx) this.fx.resize(this.canvas.width, this.canvas.height);
+    };
+    window.addEventListener('resize', resize);
+    resize();
+  }
+
+  initInputs() {
+    window.addEventListener('keydown', (e) => {
+      this.input.keys[e.code] = true;
+
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (this.state === 'PLAYING') this.pauseGame();
+        else if (this.state === 'PAUSED') this.resumeGame();
+      }
+
+      if (e.code === 'Space') {
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+        }
+      }
+
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerDash(this.fx);
+        }
+      }
+
+      if (e.code === 'KeyQ' || e.code === 'KeyE') {
+        if (this.state === 'PLAYING' && this.player && this.player.weapons.singularity.level > 0) {
+          this.player.fireSingularity(this.singularities, this.enemies);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      this.input.keys[e.code] = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      this.input.mouseX = e.clientX;
+      this.input.mouseY = e.clientY;
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        this.input.isMouseDown = true;
+      } else if (e.button === 2) {
+        // Right click activates Grav Pulse
+        e.preventDefault();
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+        }
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) {
+        this.input.isMouseDown = false;
+      }
+    });
+
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Mobile / Touch controls
+    this.initTouchControls();
+  }
+
+  initTouchControls() {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const touchOverlay = document.getElementById('touch-controls');
+    if (isTouch && touchOverlay) {
+      touchOverlay.style.display = 'block';
+
+      const moveZone = document.getElementById('touch-move');
+      const moveKnob = document.getElementById('touch-move-knob');
+      let moveTouchId = null;
+      let startX = 0, startY = 0;
+
+      moveZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        moveTouchId = touch.identifier;
+        const rect = moveZone.getBoundingClientRect();
+        startX = rect.left + rect.width / 2;
+        startY = rect.top + rect.height / 2;
+      });
+
+      moveZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const t = e.changedTouches[i];
+          if (t.identifier === moveTouchId) {
+            const dx = t.clientX - startX;
+            const dy = t.clientY - startY;
+            const dist = Math.min(45, Math.hypot(dx, dy));
+            const angle = Math.atan2(dy, dx);
+            moveKnob.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+            this.input.touchMove.x = (Math.cos(angle) * dist) / 45;
+            this.input.touchMove.y = (Math.sin(angle) * dist) / 45;
+          }
+        }
+      });
+
+      const resetMove = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === moveTouchId) {
+            moveTouchId = null;
+            moveKnob.style.transform = 'translate(0px, 0px)';
+            this.input.touchMove.x = 0;
+            this.input.touchMove.y = 0;
+          }
+        }
+      };
+      moveZone.addEventListener('touchend', resetMove);
+      moveZone.addEventListener('touchcancel', resetMove);
+
+      // Touch Buttons
+      document.getElementById('touch-pulse-btn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+        }
+      });
+
+      document.getElementById('touch-dash-btn').addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerDash(this.fx);
+        }
+      });
+    }
+  }
+
+  initUI() {
+    // Menu Buttons
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      window.audioEngine.startMusic();
+      this.startGame();
+    });
+
+    document.getElementById('btn-how-to-play').addEventListener('click', () => {
+      document.getElementById('instructions-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-close-instructions').addEventListener('click', () => {
+      document.getElementById('instructions-modal').classList.add('hidden');
+    });
+
+    // Ship Select Cards
+    const shipCards = document.querySelectorAll('.ship-card');
+    shipCards.forEach(card => {
+      card.addEventListener('click', () => {
+        shipCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        this.selectedShip = card.dataset.ship;
+      });
+    });
+
+    // Sound Toggle Button
+    const soundBtn = document.getElementById('btn-sound-toggle');
+    soundBtn.addEventListener('click', () => {
+      const isMuted = window.audioEngine.toggleMute();
+      soundBtn.textContent = isMuted ? '🔇' : '🔊';
+    });
+
+    // Pause Toggle Button
+    document.getElementById('btn-pause-toggle').addEventListener('click', () => {
+      if (this.state === 'PLAYING') this.pauseGame();
+      else if (this.state === 'PAUSED') this.resumeGame();
+    });
+
+    document.getElementById('btn-resume-game').addEventListener('click', () => this.resumeGame());
+    document.getElementById('btn-restart-game').addEventListener('click', () => this.startGame());
+    document.getElementById('btn-quit-menu').addEventListener('click', () => this.showMenu());
+    document.getElementById('btn-play-again').addEventListener('click', () => this.startGame());
+    document.getElementById('btn-gameover-menu').addEventListener('click', () => this.showMenu());
+
+    // Volume Slider
+    document.getElementById('slider-volume').addEventListener('input', (e) => {
+      window.audioEngine.setVolume(parseFloat(e.target.value));
+    });
+  }
+
+  renderShipPreviews() {
+    const renderPreview = (canvasId, shipType, primaryCol) => {
+      const c = document.getElementById(canvasId);
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 80, 80);
+      ctx.save();
+      ctx.translate(40, 40);
+      ctx.rotate(-Math.PI / 2);
+      ctx.shadowColor = primaryCol;
+      ctx.shadowBlur = 10;
+      ctx.strokeStyle = primaryCol;
+      ctx.fillStyle = '#0e1626';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.moveTo(22, 0);
+      ctx.lineTo(-14, -16);
+      ctx.lineTo(-8, -6);
+      ctx.lineTo(-12, 0);
+      ctx.lineTo(-8, 6);
+      ctx.lineTo(-14, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = primaryCol;
+      ctx.beginPath();
+      ctx.ellipse(3, 0, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    renderPreview('preview-apex', 'apex', '#00f3ff');
+    renderPreview('preview-vortex', 'vortex', '#bc13fe');
+    renderPreview('preview-aegis', 'aegis', '#ffd700');
+  }
+
+  updateMenuStats() {
+    document.getElementById('menu-high-score').textContent = this.highScore.toLocaleString();
+    document.getElementById('menu-highest-wave').textContent = `Wave ${this.highestWave}`;
+    document.getElementById('menu-total-kills').textContent = this.totalKillsSaved.toLocaleString();
+  }
+
+  startGame() {
+    this.state = 'PLAYING';
+    this.score = 0;
+    this.combo = 1.0;
+    this.comboTimer = 0;
+    this.maxCombo = 1.0;
+    this.kills = 0;
+    this.totalDamageDealt = 0;
+    this.gameTime = 0;
+
+    this.currentWave = 1;
+    this.waveTimer = 45;
+    this.spawnTimer = 0;
+    this.spawnInterval = 1.4;
+    this.isBossActive = false;
+    this.activeBoss = null;
+
+    // Reset systems
+    this.upgrades.reset();
+    this.player = new Player(this.canvas.width, this.canvas.height, this.selectedShip);
+    this.projectiles = [];
+    this.enemies = [];
+    this.singularities = [];
+    this.crystals = [];
+
+    // Hide modals
+    document.getElementById('menu-screen').classList.add('hidden');
+    document.getElementById('pause-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    document.getElementById('upgrade-screen').classList.add('hidden');
+    document.getElementById('boss-warning').style.display = 'none';
+
+    window.audioEngine.setIntensity(1);
+    this.updateHUD();
+    this.syncArsenalTray();
+  }
+
+  pauseGame() {
+    if (this.state !== 'PLAYING') return;
+    this.state = 'PAUSED';
+    document.getElementById('pause-screen').classList.remove('hidden');
+  }
+
+  resumeGame() {
+    if (this.state !== 'PAUSED') return;
+    this.state = 'PLAYING';
+    document.getElementById('pause-screen').classList.add('hidden');
+    this.lastTime = performance.now();
+  }
+
+  showMenu() {
+    this.state = 'MENU';
+    document.getElementById('menu-screen').classList.remove('hidden');
+    document.getElementById('pause-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    document.getElementById('upgrade-screen').classList.add('hidden');
+    this.updateMenuStats();
+  }
+
+  triggerLevelUp() {
+    this.state = 'LEVEL_UP';
+    const container = document.getElementById('upgrade-cards-container');
+    container.innerHTML = '';
+
+    const options = this.upgrades.getRandomOptions(this.player, 3);
+    options.forEach(opt => {
+      const curLvl = this.upgrades.getCurrentLevel(opt.id);
+      const card = document.createElement('div');
+      card.className = `upgrade-card rarity-${opt.rarity}`;
+      card.innerHTML = `
+        <span class="upgrade-card-tag">${opt.rarity}</span>
+        <div class="upgrade-card-icon">${opt.icon}</div>
+        <div class="upgrade-card-name">${opt.name}</div>
+        <div class="upgrade-card-level">TIER ${curLvl + 1} / ${opt.maxLevel}</div>
+        <div class="upgrade-card-desc">${opt.description}</div>
+        <div class="upgrade-card-stats">${opt.statText}</div>
+      `;
+
+      card.addEventListener('click', () => {
+        this.upgrades.applyUpgrade(this.player, opt.id);
+        document.getElementById('upgrade-screen').classList.add('hidden');
+        this.syncArsenalTray();
+        this.state = 'PLAYING';
+        this.lastTime = performance.now();
+      });
+
+      container.appendChild(card);
+    });
+
+    document.getElementById('upgrade-screen').classList.remove('hidden');
+  }
+
+  triggerGameOver() {
+    this.state = 'GAME_OVER';
+    if (window.audioEngine) window.audioEngine.playGameOver();
+
+    // Save records
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      localStorage.setItem('anti_gravity_high_score', this.highScore.toString());
+    }
+    if (this.currentWave > this.highestWave) {
+      this.highestWave = this.currentWave;
+      localStorage.setItem('anti_gravity_highest_wave', this.highestWave.toString());
+    }
+    this.totalKillsSaved += this.kills;
+    localStorage.setItem('anti_gravity_total_kills', this.totalKillsSaved.toString());
+
+    // Populate Game Over stats
+    document.getElementById('stat-final-score').textContent = this.score.toLocaleString();
+    document.getElementById('stat-final-wave').textContent = `Wave ${this.currentWave}`;
+    document.getElementById('stat-final-kills').textContent = this.kills.toLocaleString();
+    document.getElementById('stat-final-damage').textContent = Math.round(this.totalDamageDealt).toLocaleString();
+    document.getElementById('stat-final-combo').textContent = `x${this.maxCombo.toFixed(1)}`;
+
+    const mins = Math.floor(this.gameTime / 60).toString().padStart(2, '0');
+    const secs = Math.floor(this.gameTime % 60).toString().padStart(2, '0');
+    document.getElementById('stat-final-time').textContent = `${mins}:${secs}`;
+
+    document.getElementById('gameover-screen').classList.remove('hidden');
+  }
+
+  syncArsenalTray() {
+    const tray = document.getElementById('active-weapons-tray');
+    tray.innerHTML = '';
+
+    const weapons = [
+      { name: 'Blaster', icon: '⚡', level: this.player.weapons.blaster.count },
+      { name: 'Railgun', icon: '💫', level: this.player.weapons.railgun.level },
+      { name: 'Missiles', icon: '🚀', level: this.player.weapons.missiles.level },
+      { name: 'Singularity', icon: '🕳', level: this.player.weapons.singularity.level },
+      { name: 'Tesla', icon: '🌩', level: this.player.weapons.tesla.level },
+      { name: 'Orbitals', icon: '🪐', level: this.player.weapons.orbitals.level }
+    ];
+
+    weapons.forEach(w => {
+      if (w.level > 0) {
+        const chip = document.createElement('div');
+        chip.className = 'weapon-icon-chip';
+        chip.title = `${w.name} (Tier ${w.level})`;
+        chip.innerHTML = `${w.icon}<span class="chip-level">${w.level}</span>`;
+        tray.appendChild(chip);
+      }
+    });
+  }
+
+  // ===================== WAVE DIRECTOR ===================== //
+
+  updateDirector(dt) {
+    if (this.isBossActive) {
+      if (this.activeBoss && !this.activeBoss.active) {
+        // Boss Defeated!
+        this.isBossActive = false;
+        this.activeBoss = null;
+        document.getElementById('boss-warning').style.display = 'none';
+
+        // Massive celebration XP drops
+        for (let i = 0; i < 20; i++) {
+          this.crystals.push(new XpCrystal(
+            this.canvas.width / 2 + (Math.random() - 0.5) * 200,
+            this.canvas.height / 2 + (Math.random() - 0.5) * 200,
+            5
+          ));
+        }
+
+        this.advanceWave();
+      }
+      return;
+    }
+
+    this.waveTimer -= dt;
+    if (this.waveTimer <= 0) {
+      if (this.currentWave % 5 === 0) {
+        // Spawn Boss!
+        this.spawnBoss();
+      } else {
+        this.advanceWave();
+      }
+    }
+
+    // Spawn Enemy Waves
+    this.spawnTimer += dt;
+    if (this.spawnTimer >= this.spawnInterval) {
+      this.spawnTimer = 0;
+      this.spawnEnemyPack();
+    }
+  }
+
+  advanceWave() {
+    this.currentWave++;
+    this.waveTimer = 45;
+    this.spawnInterval = Math.max(0.65, 1.4 - (this.currentWave * 0.08));
+
+    if (this.fx) {
+      this.fx.addShockwave(this.canvas.width / 2, this.canvas.height / 2, 400, '#00f3ff', 0.8, 6);
+      this.fx.addFloatingText(this.canvas.width / 2, this.canvas.height / 2 - 50, `WAVE ${this.currentWave} INCOMING`, '#00f3ff', 28);
+    }
+
+    // Audio intensity scaling
+    const musicIntensity = this.currentWave % 5 === 0 ? 3 : (this.currentWave > 3 ? 2 : 1);
+    window.audioEngine.setIntensity(musicIntensity);
+  }
+
+  spawnBoss() {
+    this.isBossActive = true;
+    const warning = document.getElementById('boss-warning');
+    warning.style.display = 'block';
+
+    if (window.audioEngine) window.audioEngine.setIntensity(3);
+    this.cameraShake.addTrauma(0.6);
+
+    const bx = this.canvas.width / 2;
+    const by = -80;
+    this.activeBoss = new BossLeviathan(bx, by, this.currentWave);
+    this.enemies.push(this.activeBoss);
+  }
+
+  spawnEnemyPack() {
+    const packSize = Math.floor(Math.random() * 3 + 2 + this.currentWave * 0.5);
+    const spawnSide = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
+    let originX = 0, originY = 0;
+
+    if (spawnSide === 0) { originX = Math.random() * this.canvas.width; originY = -30; }
+    else if (spawnSide === 1) { originX = this.canvas.width + 30; originY = Math.random() * this.canvas.height; }
+    else if (spawnSide === 2) { originX = Math.random() * this.canvas.width; originY = this.canvas.height + 30; }
+    else { originX = -30; originY = Math.random() * this.canvas.height; }
+
+    for (let i = 0; i < packSize; i++) {
+      const offsetX = (Math.random() - 0.5) * 60;
+      const offsetY = (Math.random() - 0.5) * 60;
+      const x = originX + offsetX;
+      const y = originY + offsetY;
+
+      // Enemy type probabilities based on wave
+      const roll = Math.random();
+      if (this.currentWave >= 4 && roll < 0.20) {
+        this.enemies.push(new Enemy(x, y, {
+          type: 'gravweaver', radius: 20, hp: 95 + this.currentWave * 15, speed: 2.2, color: '#bc13fe', scoreValue: 350, xpValue: 4
+        }));
+      } else if (this.currentWave >= 3 && roll < 0.40) {
+        this.enemies.push(new Enemy(x, y, {
+          type: 'dasher', radius: 14, hp: 55 + this.currentWave * 10, speed: 4.8, color: '#ffd700', scoreValue: 250, xpValue: 2
+        }));
+      } else if (this.currentWave >= 2 && roll < 0.65) {
+        this.enemies.push(new Enemy(x, y, {
+          type: 'orbiter', radius: 16, hp: 60 + this.currentWave * 12, speed: 3.2, color: '#00f3ff', scoreValue: 200, xpValue: 2
+        }));
+      } else {
+        // Standard Swarmers
+        this.enemies.push(new Enemy(x, y, {
+          type: 'swarmer', radius: 12, hp: 35 + this.currentWave * 8, speed: 3.5 + Math.random(), color: '#ff0055', scoreValue: 100, xpValue: 1
+        }));
+      }
+    }
+  }
+
+  // ===================== MAIN GAME LOOP ===================== //
+
+  loop(timestamp) {
+    let dt = (timestamp - this.lastTime) / 1000;
+    this.lastTime = timestamp;
+    if (dt > 0.1) dt = 0.1; // clamp delta time
+
+    if (this.state === 'PLAYING') {
+      this.update(dt);
+    }
+
+    this.render();
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  update(dt) {
+    this.gameTime += dt;
+    this.cameraShake.update(dt);
+
+    // Combo streak decay
+    if (this.comboTimer > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) {
+        this.combo = 1.0;
+      }
+    }
+
+    // Update Wave Director
+    this.updateDirector(dt);
+
+    // Update Player
+    if (this.player) {
+      const levelUp = this.player.update(dt, this.input, this.fx, this.projectiles, this.singularities, this.enemies);
+      if (levelUp) {
+        this.triggerLevelUp();
+        return;
+      }
+      if (this.player.hp <= 0) {
+        this.triggerGameOver();
+        return;
+      }
+    }
+
+    // Update Singularities
+    for (let i = this.singularities.length - 1; i >= 0; i--) {
+      const s = this.singularities[i];
+      s.update(dt, this.enemies, this.fx);
+      if (!s.active) {
+        this.singularities.splice(i, 1);
+      }
+    }
+
+    // Update Enemies
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      e.update(dt, this.player, this.projectiles, this.fx);
+      if (!e.active) {
+        // Enemy defeated!
+        this.kills++;
+        this.combo = Math.min(10.0, this.combo + 0.15);
+        this.comboTimer = 3.2; // 3.2 seconds window
+        if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+
+        const earnedScore = Math.round(e.scoreValue * this.combo);
+        this.score += earnedScore;
+
+        // Drop XP crystal
+        this.crystals.push(new XpCrystal(e.pos.x, e.pos.y, e.xpValue));
+        this.enemies.splice(i, 1);
+      }
+    }
+
+    // Update Projectiles & Check Collisions
+    for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      const p = this.projectiles[i];
+      p.update(dt, this.enemies, this.fx);
+
+      if (!p.active) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Friendly bullet vs Enemy collision
+      if (!p.isEnemy) {
+        for (let j = 0; j < this.enemies.length; j++) {
+          const e = this.enemies[j];
+          if (!e.active) continue;
+
+          if (PhysicsEngine.checkCircleOverlap(p.pos, p.radius, e.pos, e.radius)) {
+            e.takeDamage(p.damage, this.fx);
+            this.totalDamageDealt += p.damage;
+
+            if (p.pierce > 0) {
+              p.pierce--;
+            } else {
+              p.active = false;
+              this.projectiles.splice(i, 1);
+              break;
+            }
+          }
+        }
+      }
+      // Enemy bullet vs Player collision
+      else if (p.isEnemy && this.player) {
+        if (PhysicsEngine.checkCircleOverlap(p.pos, p.radius, this.player.pos, this.player.radius)) {
+          this.player.takeDamage(p.damage, this.fx, this.cameraShake);
+          p.active = false;
+          this.projectiles.splice(i, 1);
+        }
+      }
+    }
+
+    // Update XP Crystals
+    for (let i = this.crystals.length - 1; i >= 0; i--) {
+      const c = this.crystals[i];
+      c.update(dt, this.player);
+      if (!c.active) {
+        this.crystals.splice(i, 1);
+      }
+    }
+
+    // Update Particle & FX Manager
+    this.fx.update(dt, this.player ? this.player.vel : null);
+
+    // Sync HUD Elements
+    this.updateHUD();
+  }
+
+  updateHUD() {
+    if (!this.player) return;
+
+    // HP Bar
+    const hpRatio = Math.max(0, this.player.hp / this.player.maxHp);
+    document.getElementById('hp-fill').style.width = `${hpRatio * 100}%`;
+    document.getElementById('hp-val').textContent = `${Math.ceil(this.player.hp)} / ${this.player.maxHp}`;
+
+    // Shield Bar
+    const shieldRatio = Math.max(0, this.player.shield / this.player.maxShield);
+    document.getElementById('shield-fill').style.width = `${shieldRatio * 100}%`;
+    document.getElementById('shield-val').textContent = `${Math.ceil(this.player.shield)} / ${this.player.maxShield}`;
+
+    // Pulse Bar
+    const pulseRatio = this.player.pulseTimer <= 0 ? 1 : (1 - this.player.pulseTimer / this.player.pulseCooldown);
+    document.getElementById('pulse-fill').style.width = `${pulseRatio * 100}%`;
+    const pulseStatus = document.getElementById('slot-pulse-status');
+    if (this.player.pulseTimer <= 0) {
+      document.getElementById('pulse-val').textContent = 'READY';
+      pulseStatus.textContent = 'READY';
+      pulseStatus.className = 'ability-status';
+    } else {
+      document.getElementById('pulse-val').textContent = `${this.player.pulseTimer.toFixed(1)}s`;
+      pulseStatus.textContent = `${this.player.pulseTimer.toFixed(1)}s`;
+      pulseStatus.className = 'ability-status cooldown';
+    }
+
+    // Dash Slot
+    const dashStatus = document.getElementById('slot-dash-status');
+    if (this.player.dashTimer <= 0) {
+      dashStatus.textContent = 'READY';
+      dashStatus.className = 'ability-status';
+    } else {
+      dashStatus.textContent = `${this.player.dashTimer.toFixed(1)}s`;
+      dashStatus.className = 'ability-status cooldown';
+    }
+
+    // Singularity Slot
+    if (this.player.weapons.singularity.level > 0) {
+      const singStatus = document.getElementById('slot-singularity-status');
+      singStatus.textContent = 'ACTIVE';
+    }
+
+    // XP Bar
+    const xpRatio = Math.min(1, this.player.xp / this.player.xpToNextLevel);
+    document.getElementById('xp-fill').style.width = `${xpRatio * 100}%`;
+    document.getElementById('hud-level').textContent = this.player.level;
+
+    // Wave & Timer
+    document.getElementById('wave-title').textContent = this.isBossActive ? 'BOSS FIGHT' : `WAVE ${this.currentWave}`;
+    const mins = Math.floor(this.waveTimer / 60).toString().padStart(2, '0');
+    const secs = Math.floor(this.waveTimer % 60).toString().padStart(2, '0');
+    document.getElementById('wave-timer').textContent = this.isBossActive ? 'SURVIVE' : `${mins}:${secs}`;
+
+    // Score & Multiplier
+    document.getElementById('hud-score').textContent = this.score.toString().padStart(6, '0');
+    document.getElementById('hud-multiplier').textContent = `${this.combo.toFixed(1)}x MULTIPLIER`;
+  }
+
+  render() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Apply Camera Shake offset & rotation
+    const shakeApplied = this.cameraShake.apply(this.ctx, this.canvas.width, this.canvas.height);
+
+    // 1. Spacetime Grid & Starfield Background
+    this.fx.drawBackground(this.ctx);
+
+    // 2. Singularities (Event Horizons)
+    for (let i = 0; i < this.singularities.length; i++) {
+      this.singularities[i].draw(this.ctx);
+    }
+
+    // 3. XP Crystals
+    for (let i = 0; i < this.crystals.length; i++) {
+      this.crystals[i].draw(this.ctx);
+    }
+
+    // 4. Enemies & Bosses
+    for (let i = 0; i < this.enemies.length; i++) {
+      this.enemies[i].draw(this.ctx);
+    }
+
+    // 5. Projectiles
+    for (let i = 0; i < this.projectiles.length; i++) {
+      this.projectiles[i].draw(this.ctx);
+    }
+
+    // 6. Player Ship
+    if (this.player) {
+      this.player.draw(this.ctx);
+    }
+
+    // 7. Shockwaves, Floating Damage Text, Particles
+    this.fx.drawForeground(this.ctx);
+
+    // Restore Camera Shake
+    this.cameraShake.restore(this.ctx, shakeApplied);
+  }
+}
+
+// Initialize on page load
+window.addEventListener('load', () => {
+  window.game = new GameEngine();
+});
