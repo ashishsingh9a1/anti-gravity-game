@@ -159,11 +159,14 @@ class GameEngine {
   }
 
   initTouchControls() {
-    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 820);
     const touchOverlay = document.getElementById('touch-controls');
     if (isTouch && touchOverlay) {
+      this.input.isTouchDevice = true;
+      this.input.touchAim = { x: 0, y: 0 };
       touchOverlay.style.display = 'block';
 
+      // Left Move Joystick
       const moveZone = document.getElementById('touch-move');
       const moveKnob = document.getElementById('touch-move-knob');
       let moveTouchId = null;
@@ -176,7 +179,7 @@ class GameEngine {
         const rect = moveZone.getBoundingClientRect();
         startX = rect.left + rect.width / 2;
         startY = rect.top + rect.height / 2;
-      });
+      }, { passive: false });
 
       moveZone.addEventListener('touchmove', (e) => {
         e.preventDefault();
@@ -192,7 +195,7 @@ class GameEngine {
             this.input.touchMove.y = (Math.sin(angle) * dist) / 45;
           }
         }
-      });
+      }, { passive: false });
 
       const resetMove = (e) => {
         for (let i = 0; i < e.changedTouches.length; i++) {
@@ -207,20 +210,87 @@ class GameEngine {
       moveZone.addEventListener('touchend', resetMove);
       moveZone.addEventListener('touchcancel', resetMove);
 
-      // Touch Buttons
-      document.getElementById('touch-pulse-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (this.state === 'PLAYING' && this.player) {
-          this.triggerPlayerPulse();
-        }
-      });
+      // Right Aim Joystick (Optional Manual Aiming)
+      const aimZone = document.getElementById('touch-aim');
+      const aimKnob = document.getElementById('touch-aim-knob');
+      if (aimZone && aimKnob) {
+        let aimTouchId = null;
+        let aimStartX = 0, aimStartY = 0;
 
-      document.getElementById('touch-dash-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (this.state === 'PLAYING' && this.player) {
-          this.player.triggerDash(this.fx);
-        }
-      });
+        aimZone.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          const touch = e.changedTouches[0];
+          aimTouchId = touch.identifier;
+          const rect = aimZone.getBoundingClientRect();
+          aimStartX = rect.left + rect.width / 2;
+          aimStartY = rect.top + rect.height / 2;
+        }, { passive: false });
+
+        aimZone.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            const t = e.changedTouches[i];
+            if (t.identifier === aimTouchId) {
+              const dx = t.clientX - aimStartX;
+              const dy = t.clientY - aimStartY;
+              const dist = Math.min(45, Math.hypot(dx, dy));
+              const angle = Math.atan2(dy, dx);
+              aimKnob.style.transform = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`;
+              if (dist > 8) {
+                this.input.touchAim.x = Math.cos(angle);
+                this.input.touchAim.y = Math.sin(angle);
+              }
+            }
+          }
+        }, { passive: false });
+
+        const resetAim = (e) => {
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === aimTouchId) {
+              aimTouchId = null;
+              aimKnob.style.transform = 'translate(0px, 0px)';
+              this.input.touchAim.x = 0;
+              this.input.touchAim.y = 0;
+            }
+          }
+        };
+        aimZone.addEventListener('touchend', resetAim);
+        aimZone.addEventListener('touchcancel', resetAim);
+      }
+
+      // Touch Buttons
+      const pulseBtn = document.getElementById('touch-pulse-btn');
+      if (pulseBtn) {
+        pulseBtn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          if (navigator.vibrate) navigator.vibrate(20);
+          if (this.state === 'PLAYING' && this.player) {
+            this.triggerPlayerPulse();
+          }
+        }, { passive: false });
+      }
+
+      const dashBtn = document.getElementById('touch-dash-btn');
+      if (dashBtn) {
+        dashBtn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          if (navigator.vibrate) navigator.vibrate(15);
+          if (this.state === 'PLAYING' && this.player) {
+            this.player.triggerDash(this.fx);
+          }
+        }, { passive: false });
+      }
+
+      const vortexBtn = document.getElementById('touch-vortex-btn');
+      if (vortexBtn) {
+        vortexBtn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          if (navigator.vibrate) navigator.vibrate(30);
+          if (this.state === 'PLAYING' && this.player && this.player.weapons.singularity.level > 0) {
+            this.player.fireSingularity(this.singularities, this.enemies);
+          }
+        }, { passive: false });
+      }
     }
   }
 
@@ -588,6 +658,11 @@ class GameEngine {
         tray.appendChild(chip);
       }
     });
+
+    if (this.player.weapons.singularity.level > 0) {
+      const touchVortex = document.getElementById('touch-vortex-btn');
+      if (touchVortex) touchVortex.style.display = 'flex';
+    }
   }
 
   updateObjectiveBanner(customText = null, isAlert = false) {

@@ -475,11 +475,6 @@ class Player {
       this.shield = Math.min(this.maxShield, this.shield + this.shieldRegenRate * dt);
     }
 
-    // Aim angle toward cursor
-    const dx = input.mouseX - this.pos.x;
-    const dy = input.mouseY - this.pos.y;
-    this.angle = Math.atan2(dy, dx);
-
     // Movement calculation
     let moveX = 0;
     let moveY = 0;
@@ -488,13 +483,41 @@ class Player {
     if (input.keys['KeyA'] || input.keys['ArrowLeft']) moveX -= 1;
     if (input.keys['KeyD'] || input.keys['ArrowRight']) moveX += 1;
 
-    // Touch joystick support
-    if (input.touchMove.x !== 0 || input.touchMove.y !== 0) {
+    // Touch joystick movement
+    if (input.touchMove && (input.touchMove.x !== 0 || input.touchMove.y !== 0)) {
       moveX = input.touchMove.x;
       moveY = input.touchMove.y;
     }
 
     const moveMag = Math.sqrt(moveX * moveX + moveY * moveY);
+
+    // Aim angle calculation (Supports Mouse, Touch Aim Stick, or Mobile Auto-Aim!)
+    if (input.touchAim && (input.touchAim.x !== 0 || input.touchAim.y !== 0)) {
+      this.angle = Math.atan2(input.touchAim.y, input.touchAim.x);
+    } else if (input.isTouchDevice) {
+      // Auto-target nearest active enemy on mobile!
+      let closestDist = Infinity;
+      let targetEnemy = null;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e.active) continue;
+        const d = this.pos.distSq(e.pos);
+        if (d < closestDist) {
+          closestDist = d;
+          targetEnemy = e;
+        }
+      }
+      if (targetEnemy) {
+        this.angle = Math.atan2(targetEnemy.pos.y - this.pos.y, targetEnemy.pos.x - this.pos.x);
+      } else if (moveMag > 0.001) {
+        this.angle = Math.atan2(moveY, moveX);
+      }
+    } else {
+      // Standard Mouse Aim
+      const dx = input.mouseX - this.pos.x;
+      const dy = input.mouseY - this.pos.y;
+      this.angle = Math.atan2(dy, dx);
+    }
     if (moveMag > 0.001) {
       moveX /= moveMag;
       moveY /= moveMag;
