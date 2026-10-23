@@ -402,6 +402,10 @@ class Player {
     this.invulnerableTimer = 0;
     this.magnetRadius = 140;
 
+    // Active Temporary Power-ups
+    this.overchargeTimer = 0;
+    this.invincibleTimer = 0;
+
     // Progression
     this.level = 1;
     this.xp = 0;
@@ -462,6 +466,8 @@ class Player {
     if (this.pulseTimer > 0) this.pulseTimer -= dt;
     if (this.dashTimer > 0) this.dashTimer -= dt;
     if (this.invulnerableTimer > 0) this.invulnerableTimer -= dt;
+    if (this.overchargeTimer > 0) this.overchargeTimer -= dt;
+    if (this.invincibleTimer > 0) this.invincibleTimer -= dt;
 
     // Shield Regeneration
     this.shieldTimer += dt;
@@ -544,7 +550,8 @@ class Player {
     // 1. Primary Blaster
     const w = this.weapons.blaster;
     w.timer += dt;
-    if (w.timer >= w.fireRate) {
+    const effectiveRate = this.overchargeTimer > 0 ? w.fireRate * 0.45 : w.fireRate;
+    if (w.timer >= effectiveRate) {
       w.timer = 0;
       this.fireBlaster(projectiles);
     }
@@ -592,25 +599,27 @@ class Player {
 
   fireBlaster(projectiles) {
     const w = this.weapons.blaster;
-    if (window.audioEngine) window.audioEngine.playLaser();
+    const isOvercharged = this.overchargeTimer > 0;
+    if (window.audioEngine) window.audioEngine.playLaser(isOvercharged ? 1.35 : 1);
 
-    const count = w.count;
+    const count = isOvercharged ? (w.count + 2) : w.count;
     const spreadAngle = count > 1 ? 0.12 : 0;
     const startAngle = this.angle - ((count - 1) * spreadAngle) / 2;
 
     for (let i = 0; i < count; i++) {
       const a = startAngle + i * spreadAngle;
       const isCrit = Math.random() < this.critChance;
-      const dmg = w.damage * this.damageMultiplier * (isCrit ? this.critMultiplier : 1);
-      const col = isCrit ? '#ffd700' : '#00f3ff';
-      const vx = Math.cos(a) * w.bulletSpeed;
-      const vy = Math.sin(a) * w.bulletSpeed;
+      const dmg = (w.damage * this.damageMultiplier * (isCrit ? this.critMultiplier : 1)) * (isOvercharged ? 1.25 : 1);
+      const col = isOvercharged ? '#ffd700' : (isCrit ? '#ff0055' : '#00f3ff');
+      const speed = isOvercharged ? w.bulletSpeed * 1.3 : w.bulletSpeed;
+      const vx = Math.cos(a) * speed;
+      const vy = Math.sin(a) * speed;
 
       projectiles.push(new Projectile(
         this.pos.x + Math.cos(a) * 18,
         this.pos.y + Math.sin(a) * 18,
         vx, vy,
-        { radius: isCrit ? 6 : 4, color: col, damage: dmg, type: 'plasma' }
+        { radius: isOvercharged ? 6 : (isCrit ? 6 : 4), color: col, damage: dmg, type: 'plasma' }
       ));
     }
   }
@@ -799,6 +808,10 @@ class Player {
 
   takeDamage(amount, fx, cameraShake) {
     if (this.invulnerableTimer > 0 || this.isDashing) return;
+    if (this.invincibleTimer > 0) {
+      if (fx) fx.emitSparks(this.pos.x, this.pos.y, 4, '#ffd700', 3);
+      return;
+    }
 
     this.shieldTimer = 0; // reset regen timer
     this.invulnerableTimer = 0.45; // i-frames
@@ -852,6 +865,21 @@ class Player {
     // Invulnerability blink
     if (this.invulnerableTimer > 0 && Math.floor(Date.now() / 60) % 2 === 0) {
       ctx.globalAlpha = 0.4;
+    }
+
+    // Aegis Invincibility Golden Sphere
+    if (this.invincibleTimer > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius + 14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+      ctx.fill();
+      ctx.restore();
     }
 
     // Shield Dome when shield active
@@ -968,7 +996,11 @@ class Enemy {
     const dist = toPlayer.mag();
     this.angle = toPlayer.heading();
 
-    if (this.type === 'swarmer') {
+    if (this.type === 'probe') {
+      // Gentle floating scout probe
+      toPlayer.normalize().mult(this.speed);
+      this.vel.add(toPlayer);
+    } else if (this.type === 'swarmer') {
       // Swarm straight at player with pack inertia
       toPlayer.normalize().mult(this.speed);
       this.vel.add(toPlayer);
@@ -1062,7 +1094,24 @@ class Enemy {
     ctx.lineWidth = 2;
     ctx.fillStyle = '#160815';
 
-    if (this.type === 'swarmer') {
+    if (this.type === 'probe') {
+      // Gentle reconnaissance drone with radar scanning rings
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Scanner radar line
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(this.radius + 4, 0);
+      ctx.stroke();
+    } else if (this.type === 'swarmer') {
       // Triangular fast interceptor
       ctx.beginPath();
       ctx.moveTo(this.radius, 0);
@@ -1276,6 +1325,245 @@ class BossLeviathan extends Enemy {
   }
 }
 
+// ===================== EXPLOSIVE GRAV-BARREL ===================== //
+class ExplosiveBarrel {
+  constructor(x, y) {
+    this.pos = new Vec2(x, y);
+    this.vel = new Vec2((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4);
+    this.radius = 16;
+    this.hp = 1;
+    this.active = true;
+    this.isDetonating = false;
+    this.detonateTimer = 0.35;
+    this.blastRadius = 190;
+    this.blastDamage = 160;
+    this.rot = Math.random() * Math.PI;
+    this.flashState = 0;
+  }
+
+  takeDamage(amount, fx) {
+    if (this.isDetonating || !this.active) return;
+    this.isDetonating = true;
+    if (fx) {
+      fx.addFloatingText(this.pos.x, this.pos.y - 15, 'CRITICAL HAZARD!', '#ff4400', 14);
+      fx.emitSparks(this.pos.x, this.pos.y, 6, '#ff4400', 4);
+    }
+  }
+
+  update(dt, enemies, barrels, fx, cameraShake) {
+    if (!this.active) return;
+    this.pos.x += this.vel.x * 60 * dt;
+    this.pos.y += this.vel.y * 60 * dt;
+    this.rot += dt * 0.6;
+
+    if (this.isDetonating) {
+      this.detonateTimer -= dt;
+      this.flashState += dt * 25;
+      if (fx && Math.random() < 0.4) {
+        fx.emitSparks(this.pos.x, this.pos.y, 2, '#ffaa00', 3);
+      }
+
+      if (this.detonateTimer <= 0) {
+        this.explode(enemies, barrels, fx, cameraShake);
+      }
+    }
+  }
+
+  explode(enemies, barrels, fx, cameraShake) {
+    this.active = false;
+    if (window.audioEngine) window.audioEngine.playBarrelExplosion();
+    if (cameraShake) cameraShake.addTrauma(0.5);
+
+    if (fx) {
+      fx.addShockwave(this.pos.x, this.pos.y, this.blastRadius, '#ff4400', 0.55, 7);
+      fx.emitExplosion(this.pos.x, this.pos.y, 2.2, '#ff4400', '#ffd700');
+      fx.grid.warp(this.pos.x, this.pos.y, 65, this.blastRadius * 1.3);
+      fx.addFloatingText(this.pos.x, this.pos.y - 30, 'BARREL SUPERNOVA!', '#ffaa00', 20);
+    }
+
+    // Damage all enemies in blast radius
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (!e.active) continue;
+      const d = this.pos.dist(e.pos);
+      if (d <= this.blastRadius) {
+        const falloff = 1 - d / this.blastRadius;
+        e.takeDamage(this.blastDamage * (0.6 + falloff * 0.4), fx);
+      }
+    }
+
+    // Chain reaction with nearby barrels!
+    for (let i = 0; i < barrels.length; i++) {
+      const b = barrels[i];
+      if (b === this || !b.active || b.isDetonating) continue;
+      if (this.pos.dist(b.pos) <= this.blastRadius) {
+        b.takeDamage(1, fx);
+      }
+    }
+  }
+
+  draw(ctx) {
+    if (!this.active) return;
+    ctx.save();
+    ctx.translate(this.pos.x, this.pos.y);
+    ctx.rotate(this.rot);
+
+    const isFlashing = this.isDetonating && Math.floor(this.flashState) % 2 === 0;
+    const col = isFlashing ? '#ffffff' : '#ff4400';
+
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2.5;
+    ctx.fillStyle = isFlashing ? 'rgba(255, 68, 0, 0.4)' : '#1a0804';
+
+    // Hexagonal fuel cell
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      const px = Math.cos(a) * this.radius;
+      const py = Math.sin(a) * this.radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Hazard Core Icon
+    ctx.fillStyle = '#ffaa00';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+// ===================== SUPPLY DROP POD ===================== //
+class SupplyDrop {
+  constructor(x, y, type = null) {
+    this.pos = new Vec2(x, y);
+    this.vel = new Vec2((Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8);
+    this.radius = 18;
+    this.active = true;
+    this.life = 40; // 40 seconds before drifting away
+    this.pulse = 0;
+
+    const types = ['overcharge', 'invincibility', 'nuke', 'vacuum', 'repair'];
+    this.type = type || types[Math.floor(Math.random() * types.length)];
+
+    this.config = {
+      overcharge: { icon: '⚡', color: '#ffd700', label: 'HYPER-OVERCHARGE (3X FIREPOWER)' },
+      invincibility: { icon: '🛡️', color: '#00f3ff', label: 'AEGIS FORCEFIELD (INVINCIBLE)' },
+      nuke: { icon: '💣', color: '#ff0055', label: 'SUPERNOVA NUKE (SCREEN WIPE)' },
+      vacuum: { icon: '🧲', color: '#bc13fe', label: 'QUANTUM VACUUM (ALL SCRAP)' },
+      repair: { icon: '💚', color: '#00ff88', label: 'NANO-REPAIR (100% REPAIR)' }
+    }[this.type];
+  }
+
+  update(dt, player, enemies, crystals, fx, cameraShake) {
+    if (!this.active) return;
+    this.life -= dt;
+    if (this.life <= 0) {
+      this.active = false;
+      return;
+    }
+
+    this.pos.x += this.vel.x * 60 * dt;
+    this.pos.y += this.vel.y * 60 * dt;
+    this.pulse += dt * 4;
+
+    // Player touch pickup
+    if (PhysicsEngine.checkCircleOverlap(this.pos, this.radius, player.pos, player.radius)) {
+      this.collect(player, enemies, crystals, fx, cameraShake);
+    }
+  }
+
+  collect(player, enemies, crystals, fx, cameraShake) {
+    this.active = false;
+    if (window.audioEngine) window.audioEngine.playPowerupPickup();
+
+    if (fx) {
+      fx.addShockwave(this.pos.x, this.pos.y, 140, this.config.color, 0.5, 5);
+      fx.emitSparks(this.pos.x, this.pos.y, 16, this.config.color, 5);
+      fx.addFloatingText(player.pos.x, player.pos.y - 35, this.config.label, this.config.color, 18);
+    }
+
+    if (this.type === 'overcharge') {
+      player.overchargeTimer = 9.0;
+    } else if (this.type === 'invincibility') {
+      player.invincibleTimer = 7.0;
+    } else if (this.type === 'nuke') {
+      if (window.audioEngine) window.audioEngine.playExplosion(2.5);
+      if (cameraShake) cameraShake.addTrauma(0.7);
+      if (fx) {
+        fx.addShockwave(window.innerWidth / 2, window.innerHeight / 2, Math.max(window.innerWidth, window.innerHeight), '#ff0055', 0.8, 8);
+        fx.grid.warp(window.innerWidth / 2, window.innerHeight / 2, 80, 500);
+      }
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e.active || e.isBoss) continue;
+        e.takeDamage(999, fx);
+      }
+    } else if (this.type === 'vacuum') {
+      for (let i = 0; i < crystals.length; i++) {
+        const c = crystals[i];
+        if (!c.active) continue;
+        const angle = Math.atan2(player.pos.y - c.pos.y, player.pos.x - c.pos.x);
+        c.vel.x = Math.cos(angle) * 900;
+        c.vel.y = Math.sin(angle) * 900;
+      }
+    } else if (this.type === 'repair') {
+      player.hp = player.maxHp;
+      player.shield = player.maxShield * 1.5; // overcharged shield!
+      if (fx) {
+        fx.addFloatingText(player.pos.x, player.pos.y - 20, '+100% REPAIRED!', '#00ff88', 18);
+      }
+    }
+  }
+
+  draw(ctx) {
+    if (!this.active) return;
+    ctx.save();
+    ctx.translate(this.pos.x, this.pos.y);
+
+    const scale = 1 + Math.sin(this.pulse) * 0.1;
+    ctx.scale(scale, scale);
+
+    // Glowing supply capsule container
+    ctx.shadowColor = this.config.color;
+    ctx.shadowBlur = 16;
+    ctx.strokeStyle = this.config.color;
+    ctx.lineWidth = 2.5;
+    ctx.fillStyle = 'rgba(8, 16, 32, 0.85)';
+
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner rotating ring
+    ctx.rotate(this.pulse * 0.5);
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Icon emoji
+    ctx.rotate(-this.pulse * 0.5);
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.config.icon, 0, 1);
+
+    ctx.restore();
+  }
+}
+
+window.ExplosiveBarrel = ExplosiveBarrel;
+window.SupplyDrop = SupplyDrop;
 window.Projectile = Projectile;
 window.SingularityWell = SingularityWell;
 window.OrbitalSatellite = OrbitalSatellite;

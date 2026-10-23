@@ -58,6 +58,11 @@
             </div>
             <span id="pulse-val" class="bar-val">READY</span>
           </div>
+
+          <!-- Active Powerup Badges Tray -->
+          <div id="powerup-tray" class="powerup-tray">
+            <!-- Dynamically populated when powerups are active -->
+          </div>
         </div>
 
         <div class="hud-center">
@@ -68,6 +73,11 @@
           <div class="wave-display">
             <div id="wave-title" class="wave-title">WAVE 1</div>
             <div id="wave-timer" class="wave-timer">00:00</div>
+          </div>
+          <!-- Interactive Objective / Mission Banner -->
+          <div id="objective-banner" class="objective-banner">
+            <span id="objective-icon">🎯</span>
+            <span id="objective-text">SECTOR 1: CALIBRATE THRUSTERS & DESTROY SCOUT PROBES</span>
           </div>
         </div>
 
@@ -100,19 +110,19 @@
 
         <div class="hud-right">
           <div class="ability-slots">
-            <div class="ability-slot">
+            <div class="ability-slot" id="slot-pulse" title="Click or Press SPACE / RIGHT-CLICK">
               <span class="ability-key">SPACE / R-CLK</span>
               <span class="ability-icon">🌀</span>
               <span class="ability-name">PULSE</span>
               <span id="slot-pulse-status" class="ability-status">READY</span>
             </div>
-            <div class="ability-slot">
+            <div class="ability-slot" id="slot-dash" title="Click or Press SHIFT">
               <span class="ability-key">SHIFT</span>
               <span class="ability-icon">⚡</span>
               <span class="ability-name">PHASE DASH</span>
               <span id="slot-dash-status" class="ability-status">READY</span>
             </div>
-            <div class="ability-slot" id="slot-singularity-box" style="display: none;">
+            <div class="ability-slot" id="slot-singularity-box" title="Click or Press Q / E" style="display: none;">
               <span class="ability-key">Q / E</span>
               <span class="ability-icon">🕳</span>
               <span class="ability-name">VORTEX</span>
@@ -141,6 +151,28 @@
         <div class="game-title-sub">NEO-COSMOS ROGUELITE ARENA</div>
         <h1 class="game-title">ANTI-GRAVITY // OVERDRIVE</h1>
         <p class="game-subtitle">HARNESS GRAVITATIONAL FORCES &bull; OBLITERATE THE SWARM &bull; EVOLVE YOUR CRAFT</p>
+      </div>
+
+      <!-- Difficulty Selector (Cadet, Commander, Overdrive) -->
+      <div class="difficulty-container">
+        <div class="diff-header">SELECT MISSION DIFFICULTY</div>
+        <div class="diff-options">
+          <button class="diff-btn selected" data-diff="cadet">
+            <span class="diff-icon">🌱</span>
+            <span class="diff-name">CADET (EASY)</span>
+            <span class="diff-desc">Gentle onboarding &bull; +50% XP &bull; Slower swarm</span>
+          </button>
+          <button class="diff-btn" data-diff="commander">
+            <span class="diff-icon">⚔️</span>
+            <span class="diff-name">COMMANDER (NORMAL)</span>
+            <span class="diff-desc">Standard balanced challenge &bull; Roguelite combat</span>
+          </button>
+          <button class="diff-btn" data-diff="overdrive">
+            <span class="diff-icon">💀</span>
+            <span class="diff-name">OVERDRIVE (HARD)</span>
+            <span class="diff-desc">Relentless swarm &bull; +50% High Score multiplier</span>
+          </button>
+        </div>
       </div>
 
       <!-- Ship Selection Cards -->
@@ -220,19 +252,19 @@
           </div>
           <div class="instruction-item">
             <span class="instruction-key">SPACE / R-CLICK</span>
-            <span><b>ANTI-GRAVITY PULSE:</b> Deflects incoming bullets into enemy homing missiles, blasts swarms back, and vacuums all XP crystals!</span>
+            <span><b>ANTI-GRAVITY PULSE:</b> Deflects incoming bullets into enemy homing missiles, blasts swarms back, and vacuums all XP crystals! (Or click the HUD slot directly!)</span>
           </div>
           <div class="instruction-item">
             <span class="instruction-key">L-SHIFT</span>
             <span><b>PHASE DASH:</b> Teleport forward with invulnerability frames and trail explosions.</span>
           </div>
           <div class="instruction-item">
-            <span class="instruction-key">P / ESC</span>
-            <span>Pause flight simulation and adjust audio volume.</span>
+            <span class="instruction-key">📦 SUPPLY PODS</span>
+            <span>Collect drifting emergency capsules for Hyper-Overcharge, Shield Invincibility, Singularity Nukes, and Nano-Repair!</span>
           </div>
           <div class="instruction-item">
-            <span class="instruction-key">GRAV CORES</span>
-            <span>Defeat elite enemies and Leviathan bosses every 5 waves for legendary upgrades!</span>
+            <span class="instruction-key">🛢 GRAV BARRELS</span>
+            <span>Shoot or pulse floating quantum fuel cores to detonate massive chain-reaction explosions wiping whole swarms!</span>
           </div>
         </div>
 
@@ -249,6 +281,16 @@
 
       <div id="upgrade-cards-container" class="upgrade-cards-container">
         <!-- Rendered dynamically by upgrades.js -->
+      </div>
+
+      <!-- Interactive Extra Options: Reroll or Salvage -->
+      <div class="upgrade-actions-bar">
+        <button id="btn-reroll-cards" class="cyber-btn btn-secondary">
+          🎲 REROLL AUGMENTATIONS (<span id="reroll-count">1</span> LEFT)
+        </button>
+        <button id="btn-salvage-cards" class="cyber-btn btn-secondary">
+          ⚡ SALVAGE FOR FULL REPAIR & SHIELD RECHARGE
+        </button>
       </div>
     </div>
 

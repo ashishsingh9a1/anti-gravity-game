@@ -366,6 +366,63 @@ class SoundEngine {
     });
   }
 
+  playPowerupPickup() {
+    if (!this.ctx || this.isMuted) return;
+    this.resume();
+    const t = this.ctx.currentTime;
+    const notes = [440.00, 554.37, 659.25, 880.00]; // A major sparkling chord
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const time = t + idx * 0.05;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time);
+      gain.gain.setValueAtTime(0.22, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(time);
+      osc.stop(time + 0.26);
+    });
+  }
+
+  playBarrelExplosion() {
+    if (!this.ctx || this.isMuted) return;
+    this.resume();
+    this.playExplosion(2.0);
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(t);
+    osc.stop(t + 0.52);
+  }
+
+  playObjectiveComplete() {
+    if (!this.ctx || this.isMuted) return;
+    this.resume();
+    const t = this.ctx.currentTime;
+    const chord = [587.33, 739.99, 880.00]; // D, F#, A
+    chord.forEach((freq) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.18, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.start(t);
+      osc.stop(t + 0.36);
+    });
+  }
+
   // ===================== PROCEDURAL SYNTHWAVE MUSIC ===================== //
 
   startMusic() {

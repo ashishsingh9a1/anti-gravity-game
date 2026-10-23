@@ -9,6 +9,8 @@
   --purple-glow: rgba(188, 19, 254, 0.45);
   --green: #00ff88;
   --green-glow: rgba(0, 255, 136, 0.45);
+  --orange: #ff7700;
+  --orange-glow: rgba(255, 119, 0, 0.45);
   --bg-dark: #070913;
   --card-bg: rgba(14, 20, 36, 0.85);
   --panel-border: rgba(0, 243, 255, 0.25);
@@ -78,7 +80,7 @@ canvas#game-canvas {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 20px;
+  padding: 16px 20px;
 }
 
 /* HUD Top Bar */
@@ -108,12 +110,12 @@ canvas#game-canvas {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(8, 12, 24, 0.7);
-  padding: 6px 12px;
+  background: rgba(8, 12, 24, 0.75);
+  padding: 5px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(8px);
-  min-width: 250px;
+  min-width: 240px;
 }
 
 .bar-label {
@@ -158,7 +160,7 @@ canvas#game-canvas {
 .bar-val {
   font-family: var(--font-mono);
   font-size: 12px;
-  width: 60px;
+  width: 65px;
   text-align: right;
   color: #ccc;
 }
@@ -188,13 +190,13 @@ canvas#game-canvas {
   gap: 8px;
   background: rgba(255, 215, 0, 0.12);
   border: 1px solid var(--accent);
-  padding: 4px 14px;
+  padding: 3px 14px;
   border-radius: 20px;
   color: var(--accent);
   font-weight: 800;
   letter-spacing: 1.5px;
   text-shadow: 0 0 10px var(--accent-glow);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 /* Wave & Timer Display */
@@ -205,7 +207,7 @@ canvas#game-canvas {
 }
 
 .wave-title {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   letter-spacing: 3px;
   color: #fff;
@@ -214,9 +216,62 @@ canvas#game-canvas {
 
 .wave-timer {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 14px;
   color: #9bb;
   letter-spacing: 1px;
+}
+
+/* Interactive Mission Objective Banner */
+.objective-banner {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(8, 16, 36, 0.85);
+  border: 1px solid var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+  border-radius: 20px;
+  padding: 4px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+  animation: banner-float 3s ease-in-out infinite alternate;
+}
+
+@keyframes banner-float {
+  0% { transform: translateY(0px); }
+  100% { transform: translateY(-3px); }
+}
+
+.objective-banner.alert-supply {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+  color: var(--accent);
+  animation: pulse-warn 0.8s infinite alternate;
+}
+
+/* Active Power-up Badges Tray */
+.powerup-tray {
+  display: flex;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.powerup-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 215, 0, 0.2);
+  border: 1px solid var(--accent);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  text-shadow: 0 0 8px var(--accent-glow);
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: pulse-warn 1s infinite alternate;
 }
 
 /* Score & Multiplier */
@@ -228,7 +283,7 @@ canvas#game-canvas {
 
 .score-num {
   font-family: var(--font-mono);
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 800;
   color: #fff;
   text-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
@@ -236,7 +291,7 @@ canvas#game-canvas {
 
 .multiplier-tag {
   display: inline-block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 4px;
@@ -246,7 +301,7 @@ canvas#game-canvas {
   text-shadow: 0 0 8px var(--secondary-glow);
 }
 
-/* Ability Quick Cooldown Slots Bottom HUD */
+/* Ability Quick Cooldown Slots Bottom HUD (Interactive & Clickable!) */
 .hud-bottom {
   display: flex;
   justify-content: space-between;
@@ -256,26 +311,41 @@ canvas#game-canvas {
 
 .ability-slots {
   display: flex;
-  gap: 15px;
+  gap: 12px;
 }
 
 .ability-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(10, 15, 30, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(10, 15, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 8px 12px;
   border-radius: 8px;
-  min-width: 70px;
+  min-width: 72px;
   backdrop-filter: blur(8px);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ability-slot:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+  background: rgba(20, 32, 60, 0.95);
+}
+
+.ability-slot:active {
+  transform: translateY(1px);
+  box-shadow: 0 0 5px var(--primary-glow);
 }
 
 .ability-key {
-  font-size: 11px;
+  font-size: 10px;
   color: #8892b0;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .ability-icon {
@@ -284,7 +354,7 @@ canvas#game-canvas {
 }
 
 .ability-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #ccd6f6;
 }
@@ -303,11 +373,12 @@ canvas#game-canvas {
 /* Quick Control Hints */
 .control-hints {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  background: rgba(0, 0, 0, 0.5);
-  padding: 6px 12px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 14px;
   border-radius: 6px;
   letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Active Weapons / Modifiers Tray */
@@ -322,7 +393,7 @@ canvas#game-canvas {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(20, 30, 50, 0.8);
+  background: rgba(20, 30, 50, 0.85);
   border: 1px solid var(--primary);
   display: flex;
   align-items: center;
@@ -348,7 +419,7 @@ canvas#game-canvas {
   justify-content: center;
 }
 
-/* Fullscreen Overlays (Menu, Card Selection, Pause, GameOver) */
+/* Fullscreen Overlays */
 .overlay-screen {
   position: absolute;
   top: 0;
@@ -360,11 +431,13 @@ canvas#game-canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(4, 7, 18, 0.85);
+  background: rgba(4, 7, 18, 0.88);
   backdrop-filter: blur(12px);
   opacity: 1;
   transition: opacity 0.3s ease;
   pointer-events: auto;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 .overlay-screen.hidden {
@@ -376,11 +449,11 @@ canvas#game-canvas {
 /* Main Menu Styles */
 .title-container {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 16px;
 }
 
 .game-title-sub {
-  font-size: 18px;
+  font-size: 15px;
   letter-spacing: 8px;
   color: var(--primary);
   text-transform: uppercase;
@@ -389,36 +462,118 @@ canvas#game-canvas {
 }
 
 .game-title {
-  font-size: 64px;
+  font-size: 52px;
   font-weight: 900;
-  letter-spacing: 6px;
+  letter-spacing: 5px;
   text-transform: uppercase;
   background: linear-gradient(135deg, #ffffff 0%, #00f3ff 50%, #bc13fe 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 0 25px rgba(0, 243, 255, 0.5));
-  margin: 5px 0 10px 0;
+  margin: 4px 0 6px 0;
 }
 
 .game-subtitle {
-  font-size: 16px;
+  font-size: 14px;
   color: #a0aec0;
   letter-spacing: 2px;
+}
+
+/* Difficulty Selector */
+.difficulty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.diff-header {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #8892b0;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.diff-options {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.diff-btn {
+  flex: 1;
+  background: rgba(14, 20, 36, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #cbd5e1;
+}
+
+.diff-btn:hover {
+  border-color: var(--primary);
+  background: rgba(18, 28, 52, 0.85);
+  transform: translateY(-2px);
+}
+
+.diff-btn.selected {
+  border-color: var(--green);
+  background: rgba(0, 255, 136, 0.12);
+  box-shadow: 0 0 15px var(--green-glow);
+  color: #fff;
+}
+
+.diff-btn[data-diff="commander"].selected {
+  border-color: var(--primary);
+  background: rgba(0, 243, 255, 0.12);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.diff-btn[data-diff="overdrive"].selected {
+  border-color: var(--secondary);
+  background: rgba(255, 0, 85, 0.15);
+  box-shadow: 0 0 15px var(--secondary-glow);
+}
+
+.diff-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.diff-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.diff-desc {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+  text-align: center;
 }
 
 /* Ship Selector in Menu */
 .ship-selection-container {
   display: flex;
-  gap: 20px;
-  margin-bottom: 35px;
+  gap: 18px;
+  margin-bottom: 22px;
 }
 
 .ship-card {
   background: rgba(18, 25, 45, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  padding: 20px;
-  width: 210px;
+  padding: 16px;
+  width: 195px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -444,44 +599,44 @@ canvas#game-canvas {
 .ship-card.selected::before {
   content: "ACTIVE";
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   background: var(--primary);
   color: #000;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .ship-preview {
-  width: 80px;
-  height: 80px;
-  margin-bottom: 15px;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 10px;
 }
 
 .ship-name {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 1px;
   color: #fff;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .ship-archetype {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--primary);
   font-weight: 600;
   letter-spacing: 1px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .ship-stats {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 11px;
+  gap: 5px;
+  font-size: 10px;
   color: #8892b0;
 }
 
@@ -491,8 +646,8 @@ canvas#game-canvas {
 }
 
 .ship-trait {
-  margin-top: 10px;
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 10px;
   color: var(--accent);
   text-align: center;
   line-height: 1.3;
@@ -503,8 +658,8 @@ canvas#game-canvas {
   background: linear-gradient(135deg, rgba(0, 243, 255, 0.15) 0%, rgba(188, 19, 254, 0.25) 100%);
   border: 1px solid var(--primary);
   color: #fff;
-  padding: 14px 42px;
-  font-size: 20px;
+  padding: 12px 36px;
+  font-size: 17px;
   font-weight: 900;
   letter-spacing: 3px;
   border-radius: 6px;
@@ -522,14 +677,14 @@ canvas#game-canvas {
   background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
   color: #000;
   box-shadow: 0 0 30px var(--primary-glow);
-  transform: scale(1.05);
+  transform: scale(1.04);
 }
 
 .cyber-btn.btn-secondary {
   border-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.05);
-  font-size: 15px;
-  padding: 10px 24px;
+  font-size: 14px;
+  padding: 9px 20px;
   box-shadow: none;
 }
 
@@ -548,13 +703,13 @@ canvas#game-canvas {
 
 /* High Score Ticker */
 .high-score-banner {
-  margin-top: 30px;
+  margin-top: 22px;
   display: flex;
-  gap: 25px;
-  font-size: 14px;
+  gap: 20px;
+  font-size: 13px;
   color: #a0aec0;
   background: rgba(0, 0, 0, 0.4);
-  padding: 8px 20px;
+  padding: 6px 18px;
   border-radius: 30px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -566,34 +721,34 @@ canvas#game-canvas {
 
 /* Upgrade Card Selection Modal */
 .upgrade-modal-title {
-  font-size: 38px;
+  font-size: 32px;
   font-weight: 900;
   letter-spacing: 4px;
   color: var(--accent);
   text-shadow: 0 0 20px var(--accent-glow);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   text-transform: uppercase;
 }
 
 .upgrade-modal-subtitle {
-  font-size: 15px;
+  font-size: 14px;
   color: #cbd5e1;
-  margin-bottom: 35px;
+  margin-bottom: 22px;
   letter-spacing: 1.5px;
 }
 
 .upgrade-cards-container {
   display: flex;
-  gap: 25px;
-  max-width: 1000px;
+  gap: 20px;
+  max-width: 950px;
 }
 
 .upgrade-card {
   background: var(--card-bg);
   border: 2px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 24px 20px;
-  width: 280px;
+  border-radius: 12px;
+  padding: 22px 18px;
+  width: 270px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -604,35 +759,24 @@ canvas#game-canvas {
 }
 
 .upgrade-card:hover {
-  transform: translateY(-10px) scale(1.03);
+  transform: translateY(-8px) scale(1.03);
   box-shadow: 0 15px 40px rgba(0, 243, 255, 0.4);
   border-color: var(--primary);
 }
 
-.upgrade-card.rarity-common {
-  border-color: #64748b;
-}
-.upgrade-card.rarity-rare {
-  border-color: var(--primary);
-  box-shadow: 0 0 15px var(--primary-glow);
-}
-.upgrade-card.rarity-epic {
-  border-color: var(--purple);
-  box-shadow: 0 0 20px var(--purple-glow);
-}
-.upgrade-card.rarity-legendary {
-  border-color: var(--accent);
-  box-shadow: 0 0 25px var(--accent-glow);
-}
+.upgrade-card.rarity-common { border-color: #64748b; }
+.upgrade-card.rarity-rare { border-color: var(--primary); box-shadow: 0 0 15px var(--primary-glow); }
+.upgrade-card.rarity-epic { border-color: var(--purple); box-shadow: 0 0 20px var(--purple-glow); }
+.upgrade-card.rarity-legendary { border-color: var(--accent); box-shadow: 0 0 25px var(--accent-glow); }
 
 .upgrade-card-tag {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 10px;
+  right: 10px;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1px;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 4px;
   text-transform: uppercase;
 }
@@ -643,25 +787,25 @@ canvas#game-canvas {
 .rarity-legendary .upgrade-card-tag { background: rgba(255, 215, 0, 0.2); color: var(--accent); border: 1px solid var(--accent); }
 
 .upgrade-card-icon {
-  width: 70px;
-  height: 70px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  margin: 15px 0 20px 0;
+  font-size: 30px;
+  margin: 12px 0 16px 0;
 }
 
 .upgrade-card-name {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 1px;
   color: #fff;
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .upgrade-card-level {
@@ -669,15 +813,15 @@ canvas#game-canvas {
   color: var(--accent);
   font-weight: 700;
   letter-spacing: 1px;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .upgrade-card-desc {
   font-size: 13px;
   color: #cbd5e1;
-  line-height: 1.5;
+  line-height: 1.4;
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex: 1;
 }
 
@@ -688,14 +832,21 @@ canvas#game-canvas {
   font-weight: 600;
 }
 
+/* Upgrade Extra Actions Bar (Reroll / Salvage) */
+.upgrade-actions-bar {
+  display: flex;
+  gap: 15px;
+  margin-top: 22px;
+}
+
 /* Game Over Modal */
 .gameover-title {
-  font-size: 64px;
+  font-size: 58px;
   font-weight: 900;
   letter-spacing: 8px;
   color: var(--secondary);
   text-shadow: 0 0 30px var(--secondary-glow);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .gameover-stats-grid {
@@ -704,10 +855,10 @@ canvas#game-canvas {
   gap: 15px;
   background: rgba(14, 20, 36, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 25px;
+  padding: 22px;
   border-radius: 12px;
-  min-width: 450px;
-  margin: 25px 0;
+  min-width: 440px;
+  margin: 20px 0;
 }
 
 .stat-item {
@@ -716,14 +867,14 @@ canvas#game-canvas {
 }
 
 .stat-item-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #8892b0;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
 .stat-item-val {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   font-family: var(--font-mono);
   color: #fff;
@@ -731,12 +882,12 @@ canvas#game-canvas {
 
 /* Pause Modal */
 .pause-title {
-  font-size: 48px;
+  font-size: 44px;
   font-weight: 900;
   letter-spacing: 6px;
   color: var(--primary);
   text-shadow: 0 0 20px var(--primary-glow);
-  margin-bottom: 25px;
+  margin-bottom: 22px;
 }
 
 /* Touch Controls for Mobile / Tablets */
@@ -805,7 +956,7 @@ canvas#game-canvas {
   background: rgba(255, 0, 85, 0.85);
   color: #fff;
   padding: 12px 60px;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   letter-spacing: 6px;
   text-transform: uppercase;

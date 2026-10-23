@@ -11,6 +11,7 @@ class GameEngine {
     // State
     this.state = 'MENU'; // 'MENU', 'PLAYING', 'PAUSED', 'LEVEL_UP', 'GAME_OVER'
     this.selectedShip = 'apex';
+    this.selectedDifficulty = 'cadet'; // 'cadet' (Easy), 'commander' (Normal), 'overdrive' (Hard)
     this.lastTime = performance.now();
 
     // Core Systems
@@ -24,6 +25,8 @@ class GameEngine {
     this.enemies = [];
     this.singularities = [];
     this.crystals = [];
+    this.barrels = [];
+    this.supplyDrops = [];
 
     // Session Stats
     this.score = 0;
@@ -33,14 +36,17 @@ class GameEngine {
     this.kills = 0;
     this.totalDamageDealt = 0;
     this.gameTime = 0;
+    this.rerollsRemaining = 1;
 
-    // Wave Director
+    // Wave Director & Progressive Difficulty
     this.currentWave = 1;
-    this.waveTimer = 45; // 45 seconds per wave
+    this.waveTimer = 40; // seconds per wave
     this.spawnTimer = 0;
-    this.spawnInterval = 1.6;
+    this.spawnInterval = 1.8;
     this.isBossActive = false;
     this.activeBoss = null;
+    this.supplyDropTimer = 18;
+    this.barrelSpawnTimer = 8;
 
     // Input State
     this.input = {
@@ -87,7 +93,7 @@ class GameEngine {
 
       if (e.code === 'Space') {
         if (this.state === 'PLAYING' && this.player) {
-          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+          this.triggerPlayerPulse();
         }
       }
 
@@ -120,7 +126,7 @@ class GameEngine {
         // Right click activates Grav Pulse
         e.preventDefault();
         if (this.state === 'PLAYING' && this.player) {
-          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+          this.triggerPlayerPulse();
         }
       }
     });
@@ -135,6 +141,21 @@ class GameEngine {
 
     // Mobile / Touch controls
     this.initTouchControls();
+  }
+
+  triggerPlayerPulse() {
+    if (!this.player) return;
+    const fired = this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+    if (fired) {
+      // Also check pulse detonation on nearby barrels!
+      for (let i = 0; i < this.barrels.length; i++) {
+        const b = this.barrels[i];
+        if (!b.active || b.isDetonating) continue;
+        if (this.player.pos.dist(b.pos) <= this.player.pulseRadius) {
+          b.takeDamage(1, this.fx);
+        }
+      }
+    }
   }
 
   initTouchControls() {
@@ -190,7 +211,7 @@ class GameEngine {
       document.getElementById('touch-pulse-btn').addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (this.state === 'PLAYING' && this.player) {
-          this.player.triggerPulse(this.enemies, this.projectiles, this.crystals, this.fx);
+          this.triggerPlayerPulse();
         }
       });
 
@@ -227,6 +248,76 @@ class GameEngine {
         this.selectedShip = card.dataset.ship;
       });
     });
+
+    // Difficulty Buttons
+    const diffButtons = document.querySelectorAll('.diff-btn');
+    diffButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        diffButtons.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.selectedDifficulty = btn.dataset.diff;
+      });
+    });
+
+    // Interactive HUD Clickable Ability Slots
+    const slotPulse = document.getElementById('slot-pulse');
+    if (slotPulse) {
+      slotPulse.addEventListener('click', () => {
+        if (this.state === 'PLAYING' && this.player) {
+          this.triggerPlayerPulse();
+        }
+      });
+    }
+
+    const slotDash = document.getElementById('slot-dash');
+    if (slotDash) {
+      slotDash.addEventListener('click', () => {
+        if (this.state === 'PLAYING' && this.player) {
+          this.player.triggerDash(this.fx);
+        }
+      });
+    }
+
+    const slotSingularity = document.getElementById('slot-singularity-box');
+    if (slotSingularity) {
+      slotSingularity.addEventListener('click', () => {
+        if (this.state === 'PLAYING' && this.player && this.player.weapons.singularity.level > 0) {
+          this.player.fireSingularity(this.singularities, this.enemies);
+        }
+      });
+    }
+
+    // Upgrade Modal: Reroll & Salvage Buttons
+    const btnReroll = document.getElementById('btn-reroll-cards');
+    if (btnReroll) {
+      btnReroll.addEventListener('click', () => {
+        if (this.rerollsRemaining > 0) {
+          this.rerollsRemaining--;
+          document.getElementById('reroll-count').textContent = this.rerollsRemaining;
+          if (this.rerollsRemaining <= 0) {
+            btnReroll.style.opacity = '0.5';
+            btnReroll.style.pointerEvents = 'none';
+          }
+          this.renderUpgradeCards();
+        }
+      });
+    }
+
+    const btnSalvage = document.getElementById('btn-salvage-cards');
+    if (btnSalvage) {
+      btnSalvage.addEventListener('click', () => {
+        if (this.player) {
+          this.player.hp = this.player.maxHp;
+          this.player.shield = this.player.maxShield;
+          if (this.fx) {
+            this.fx.addFloatingText(this.player.pos.x, this.player.pos.y - 25, 'SCRAP SALVAGED: +100% REPAIRED!', '#00ff88', 18);
+          }
+        }
+        document.getElementById('upgrade-screen').classList.add('hidden');
+        this.state = 'PLAYING';
+        this.lastTime = performance.now();
+      });
+    }
 
     // Sound Toggle Button
     const soundBtn = document.getElementById('btn-sound-toggle');
@@ -297,6 +388,37 @@ class GameEngine {
     document.getElementById('menu-total-kills').textContent = this.totalKillsSaved.toLocaleString();
   }
 
+  getDifficultyMultipliers() {
+    if (this.selectedDifficulty === 'cadet') {
+      return {
+        speed: 0.65,
+        hp: 0.65,
+        spawnInterval: 2.2,
+        shieldRegen: 1.5,
+        xpBonus: 1.5,
+        scoreBonus: 1.0
+      };
+    } else if (this.selectedDifficulty === 'overdrive') {
+      return {
+        speed: 1.25,
+        hp: 1.25,
+        spawnInterval: 1.2,
+        shieldRegen: 0.85,
+        xpBonus: 1.0,
+        scoreBonus: 1.5
+      };
+    }
+    // Standard Commander
+    return {
+      speed: 1.0,
+      hp: 1.0,
+      spawnInterval: 1.6,
+      shieldRegen: 1.0,
+      xpBonus: 1.0,
+      scoreBonus: 1.0
+    };
+  }
+
   startGame() {
     this.state = 'PLAYING';
     this.score = 0;
@@ -306,21 +428,36 @@ class GameEngine {
     this.kills = 0;
     this.totalDamageDealt = 0;
     this.gameTime = 0;
+    this.rerollsRemaining = 1;
 
+    const diff = this.getDifficultyMultipliers();
     this.currentWave = 1;
-    this.waveTimer = 45;
+    this.waveTimer = 40;
     this.spawnTimer = 0;
-    this.spawnInterval = 1.4;
+    this.spawnInterval = diff.spawnInterval;
     this.isBossActive = false;
     this.activeBoss = null;
+    this.supplyDropTimer = 16;
+    this.barrelSpawnTimer = 6;
 
     // Reset systems
     this.upgrades.reset();
     this.player = new Player(this.canvas.width, this.canvas.height, this.selectedShip);
+
+    // Apply difficulty modifiers to player
+    this.player.shieldRegenRate *= diff.shieldRegen;
+
     this.projectiles = [];
     this.enemies = [];
     this.singularities = [];
     this.crystals = [];
+    this.barrels = [];
+    this.supplyDrops = [];
+
+    // Spawn 3 starting explosive barrels for interactive strategy!
+    for (let i = 0; i < 3; i++) {
+      this.spawnBarrel();
+    }
 
     // Hide modals
     document.getElementById('menu-screen').classList.add('hidden');
@@ -330,6 +467,7 @@ class GameEngine {
     document.getElementById('boss-warning').style.display = 'none';
 
     window.audioEngine.setIntensity(1);
+    this.updateObjectiveBanner();
     this.updateHUD();
     this.syncArsenalTray();
   }
@@ -358,6 +496,17 @@ class GameEngine {
 
   triggerLevelUp() {
     this.state = 'LEVEL_UP';
+    const btnReroll = document.getElementById('btn-reroll-cards');
+    if (btnReroll) {
+      document.getElementById('reroll-count').textContent = this.rerollsRemaining;
+      btnReroll.style.opacity = this.rerollsRemaining > 0 ? '1' : '0.5';
+      btnReroll.style.pointerEvents = this.rerollsRemaining > 0 ? 'auto' : 'none';
+    }
+    this.renderUpgradeCards();
+    document.getElementById('upgrade-screen').classList.remove('hidden');
+  }
+
+  renderUpgradeCards() {
     const container = document.getElementById('upgrade-cards-container');
     container.innerHTML = '';
 
@@ -385,8 +534,6 @@ class GameEngine {
 
       container.appendChild(card);
     });
-
-    document.getElementById('upgrade-screen').classList.remove('hidden');
   }
 
   triggerGameOver() {
@@ -443,7 +590,47 @@ class GameEngine {
     });
   }
 
-  // ===================== WAVE DIRECTOR ===================== //
+  updateObjectiveBanner(customText = null, isAlert = false) {
+    const banner = document.getElementById('objective-banner');
+    const icon = document.getElementById('objective-icon');
+    const text = document.getElementById('objective-text');
+
+    if (!banner || !text || !icon) return;
+
+    if (customText) {
+      text.textContent = customText;
+      if (isAlert) banner.classList.add('alert-supply');
+      else banner.classList.remove('alert-supply');
+      return;
+    }
+
+    banner.classList.remove('alert-supply');
+
+    if (this.currentWave === 1) {
+      icon.textContent = '🌱';
+      text.textContent = 'SECTOR 1 (EASY RECON): CALIBRATE SHIP & DESTROY SCOUT PROBES';
+    } else if (this.currentWave === 2) {
+      icon.textContent = '🌀';
+      text.textContent = 'SECTOR 2: DRIFTING SWARM &bull; USE SPACE / R-CLICK PULSE TO DEFLECT';
+    } else if (this.currentWave === 3) {
+      icon.textContent = '⚡';
+      text.textContent = 'SECTOR 3: LASER TURRETS &bull; REFLECT HOSTILE LASERS INTO HOMING SHOTS!';
+    } else if (this.currentWave === 4) {
+      icon.textContent = '🚀';
+      text.textContent = 'SECTOR 4: WARP INTERCEPTORS &bull; USE SHIFT TO PHASE-DASH THROUGH DANGER';
+    } else if (this.currentWave === 5) {
+      icon.textContent = '🕳';
+      text.textContent = 'SECTOR 5: GRAV-WEAVERS &bull; COUNTERACT ENEMY TRACTOR BEAMS';
+    } else if (this.currentWave === 6) {
+      icon.textContent = '💀';
+      text.textContent = 'SECTOR 6: DREADNOUGHT LEVIATHAN COLOSSUS INCOMING!';
+    } else {
+      icon.textContent = '🔥';
+      text.textContent = `SECTOR ${this.currentWave}: HYPER-OVERDRIVE &bull; SURVIVE THE VOID ESCALATION`;
+    }
+  }
+
+  // ===================== WAVE DIRECTOR & PROGRESSION ===================== //
 
   updateDirector(dt) {
     if (this.isBossActive) {
@@ -453,15 +640,15 @@ class GameEngine {
         this.activeBoss = null;
         document.getElementById('boss-warning').style.display = 'none';
 
-        // Massive celebration XP drops
-        for (let i = 0; i < 20; i++) {
+        // Massive celebration XP drops & supply drop
+        for (let i = 0; i < 24; i++) {
           this.crystals.push(new XpCrystal(
-            this.canvas.width / 2 + (Math.random() - 0.5) * 200,
-            this.canvas.height / 2 + (Math.random() - 0.5) * 200,
+            this.canvas.width / 2 + (Math.random() - 0.5) * 220,
+            this.canvas.height / 2 + (Math.random() - 0.5) * 220,
             5
           ));
         }
-
+        this.spawnSupplyDrop();
         this.advanceWave();
       }
       return;
@@ -469,7 +656,7 @@ class GameEngine {
 
     this.waveTimer -= dt;
     if (this.waveTimer <= 0) {
-      if (this.currentWave % 5 === 0) {
+      if (this.currentWave === 6 || (this.currentWave > 6 && this.currentWave % 5 === 0)) {
         // Spawn Boss!
         this.spawnBoss();
       } else {
@@ -483,20 +670,37 @@ class GameEngine {
       this.spawnTimer = 0;
       this.spawnEnemyPack();
     }
+
+    // Spawn Interactive Grav Barrels periodically
+    this.barrelSpawnTimer -= dt;
+    if (this.barrelSpawnTimer <= 0 && this.barrels.length < 4) {
+      this.barrelSpawnTimer = 14;
+      this.spawnBarrel();
+    }
+
+    // Spawn Supply Drops periodically
+    this.supplyDropTimer -= dt;
+    if (this.supplyDropTimer <= 0 && this.supplyDrops.length < 2) {
+      this.supplyDropTimer = 26;
+      this.spawnSupplyDrop();
+    }
   }
 
   advanceWave() {
     this.currentWave++;
-    this.waveTimer = 45;
-    this.spawnInterval = Math.max(0.65, 1.4 - (this.currentWave * 0.08));
+    this.waveTimer = 40;
+    const diff = this.getDifficultyMultipliers();
+    this.spawnInterval = Math.max(0.65, diff.spawnInterval - (this.currentWave * 0.08));
 
     if (this.fx) {
       this.fx.addShockwave(this.canvas.width / 2, this.canvas.height / 2, 400, '#00f3ff', 0.8, 6);
-      this.fx.addFloatingText(this.canvas.width / 2, this.canvas.height / 2 - 50, `WAVE ${this.currentWave} INCOMING`, '#00f3ff', 28);
+      this.fx.addFloatingText(this.canvas.width / 2, this.canvas.height / 2 - 50, `SECTOR ${this.currentWave} REACHED`, '#00f3ff', 28);
     }
 
+    this.updateObjectiveBanner();
+
     // Audio intensity scaling
-    const musicIntensity = this.currentWave % 5 === 0 ? 3 : (this.currentWave > 3 ? 2 : 1);
+    const musicIntensity = this.currentWave === 6 ? 3 : (this.currentWave > 3 ? 2 : 1);
     window.audioEngine.setIntensity(musicIntensity);
   }
 
@@ -512,10 +716,53 @@ class GameEngine {
     const by = -80;
     this.activeBoss = new BossLeviathan(bx, by, this.currentWave);
     this.enemies.push(this.activeBoss);
+    this.updateObjectiveBanner('ALERT: DESTROY THE DREADNOUGHT LEVIATHAN!', true);
+  }
+
+  spawnBarrel() {
+    const margin = 80;
+    const x = margin + Math.random() * (this.canvas.width - margin * 2);
+    const y = margin + Math.random() * (this.canvas.height - margin * 2);
+    this.barrels.push(new ExplosiveBarrel(x, y));
+  }
+
+  spawnSupplyDrop() {
+    const x = 50 + Math.random() * (this.canvas.width - 100);
+    const y = 50 + Math.random() * (this.canvas.height - 100);
+    this.supplyDrops.push(new SupplyDrop(x, y));
+
+    if (window.audioEngine) window.audioEngine.playObjectiveComplete();
+    this.updateObjectiveBanner('📦 SUPPLY DROP DETECTED &bull; RETRIEVE EMERGENCY CAPSULE!', true);
+    setTimeout(() => {
+      this.updateObjectiveBanner();
+    }, 4500);
   }
 
   spawnEnemyPack() {
-    const packSize = Math.floor(Math.random() * 3 + 2 + this.currentWave * 0.5);
+    const diff = this.getDifficultyMultipliers();
+
+    // Wave 1: Gentle easy Scout Probes only!
+    if (this.currentWave === 1) {
+      const probeCount = this.selectedDifficulty === 'cadet' ? 2 : 3;
+      for (let i = 0; i < probeCount; i++) {
+        const x = Math.random() < 0.5 ? -30 : this.canvas.width + 30;
+        const y = Math.random() * this.canvas.height;
+        this.enemies.push(new Enemy(x, y, {
+          type: 'probe',
+          radius: 13,
+          hp: 20 * diff.hp,
+          speed: 1.6 * diff.speed,
+          color: '#00ff88',
+          scoreValue: 80,
+          xpValue: 2,
+          damage: 5
+        }));
+      }
+      return;
+    }
+
+    // General wave packing
+    const packSize = Math.floor((Math.random() * 2 + 2 + this.currentWave * 0.4) * (this.selectedDifficulty === 'cadet' ? 0.8 : 1.0));
     const spawnSide = Math.floor(Math.random() * 4); // 0: top, 1: right, 2: bottom, 3: left
     let originX = 0, originY = 0;
 
@@ -530,24 +777,48 @@ class GameEngine {
       const x = originX + offsetX;
       const y = originY + offsetY;
 
-      // Enemy type probabilities based on wave
+      // Enemy type probabilities based on progressive wave
       const roll = Math.random();
-      if (this.currentWave >= 4 && roll < 0.20) {
+      if (this.currentWave >= 5 && roll < 0.22) {
         this.enemies.push(new Enemy(x, y, {
-          type: 'gravweaver', radius: 20, hp: 95 + this.currentWave * 15, speed: 2.2, color: '#bc13fe', scoreValue: 350, xpValue: 4
+          type: 'gravweaver',
+          radius: 20,
+          hp: (90 + this.currentWave * 14) * diff.hp,
+          speed: 2.1 * diff.speed,
+          color: '#bc13fe',
+          scoreValue: 350,
+          xpValue: 4
         }));
-      } else if (this.currentWave >= 3 && roll < 0.40) {
+      } else if (this.currentWave >= 4 && roll < 0.38) {
         this.enemies.push(new Enemy(x, y, {
-          type: 'dasher', radius: 14, hp: 55 + this.currentWave * 10, speed: 4.8, color: '#ffd700', scoreValue: 250, xpValue: 2
+          type: 'dasher',
+          radius: 14,
+          hp: (50 + this.currentWave * 10) * diff.hp,
+          speed: 4.6 * diff.speed,
+          color: '#ffd700',
+          scoreValue: 250,
+          xpValue: 2
         }));
-      } else if (this.currentWave >= 2 && roll < 0.65) {
+      } else if (this.currentWave >= 3 && roll < 0.65) {
         this.enemies.push(new Enemy(x, y, {
-          type: 'orbiter', radius: 16, hp: 60 + this.currentWave * 12, speed: 3.2, color: '#00f3ff', scoreValue: 200, xpValue: 2
+          type: 'orbiter',
+          radius: 16,
+          hp: (55 + this.currentWave * 11) * diff.hp,
+          speed: 3.0 * diff.speed,
+          color: '#00f3ff',
+          scoreValue: 200,
+          xpValue: 2
         }));
       } else {
         // Standard Swarmers
         this.enemies.push(new Enemy(x, y, {
-          type: 'swarmer', radius: 12, hp: 35 + this.currentWave * 8, speed: 3.5 + Math.random(), color: '#ff0055', scoreValue: 100, xpValue: 1
+          type: 'swarmer',
+          radius: 12,
+          hp: (30 + this.currentWave * 7) * diff.hp,
+          speed: (3.2 + Math.random() * 0.5) * diff.speed,
+          color: '#ff0055',
+          scoreValue: 100,
+          xpValue: 1
         }));
       }
     }
@@ -605,6 +876,24 @@ class GameEngine {
       }
     }
 
+    // Update Explosive Grav Barrels
+    for (let i = this.barrels.length - 1; i >= 0; i--) {
+      const b = this.barrels[i];
+      b.update(dt, this.enemies, this.barrels, this.fx, this.cameraShake);
+      if (!b.active) {
+        this.barrels.splice(i, 1);
+      }
+    }
+
+    // Update Supply Drops
+    for (let i = this.supplyDrops.length - 1; i >= 0; i--) {
+      const s = this.supplyDrops[i];
+      s.update(dt, this.player, this.enemies, this.crystals, this.fx, this.cameraShake);
+      if (!s.active) {
+        this.supplyDrops.splice(i, 1);
+      }
+    }
+
     // Update Enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
@@ -616,11 +905,13 @@ class GameEngine {
         this.comboTimer = 3.2; // 3.2 seconds window
         if (this.combo > this.maxCombo) this.maxCombo = this.combo;
 
-        const earnedScore = Math.round(e.scoreValue * this.combo);
+        const diff = this.getDifficultyMultipliers();
+        const earnedScore = Math.round(e.scoreValue * this.combo * diff.scoreBonus);
         this.score += earnedScore;
 
-        // Drop XP crystal
-        this.crystals.push(new XpCrystal(e.pos.x, e.pos.y, e.xpValue));
+        // Drop XP crystal with difficulty multiplier
+        const xpAmount = Math.max(1, Math.round(e.xpValue * diff.xpBonus));
+        this.crystals.push(new XpCrystal(e.pos.x, e.pos.y, xpAmount));
         this.enemies.splice(i, 1);
       }
     }
@@ -629,6 +920,24 @@ class GameEngine {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
       p.update(dt, this.enemies, this.fx);
+
+      if (!p.active) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Friendly bullet vs Barrel collision
+      if (!p.isEnemy) {
+        for (let bIdx = 0; bIdx < this.barrels.length; bIdx++) {
+          const b = this.barrels[bIdx];
+          if (!b.active || b.isDetonating) continue;
+          if (PhysicsEngine.checkCircleOverlap(p.pos, p.radius, b.pos, b.radius)) {
+            b.takeDamage(1, this.fx);
+            p.active = false;
+            break;
+          }
+        }
+      }
 
       if (!p.active) {
         this.projectiles.splice(i, 1);
@@ -724,13 +1033,26 @@ class GameEngine {
       singStatus.textContent = 'ACTIVE';
     }
 
+    // Active Powerups Tray in HUD
+    const powerupTray = document.getElementById('powerup-tray');
+    if (powerupTray) {
+      let html = '';
+      if (this.player.overchargeTimer > 0) {
+        html += `<div class="powerup-chip">⚡ OVERCHARGE: ${this.player.overchargeTimer.toFixed(1)}s</div>`;
+      }
+      if (this.player.invincibleTimer > 0) {
+        html += `<div class="powerup-chip" style="background: rgba(0, 243, 255, 0.25); border-color: #00f3ff;">🛡️ INVINCIBLE: ${this.player.invincibleTimer.toFixed(1)}s</div>`;
+      }
+      powerupTray.innerHTML = html;
+    }
+
     // XP Bar
     const xpRatio = Math.min(1, this.player.xp / this.player.xpToNextLevel);
     document.getElementById('xp-fill').style.width = `${xpRatio * 100}%`;
     document.getElementById('hud-level').textContent = this.player.level;
 
     // Wave & Timer
-    document.getElementById('wave-title').textContent = this.isBossActive ? 'BOSS FIGHT' : `WAVE ${this.currentWave}`;
+    document.getElementById('wave-title').textContent = this.isBossActive ? 'BOSS FIGHT' : `SECTOR ${this.currentWave}`;
     const mins = Math.floor(this.waveTimer / 60).toString().padStart(2, '0');
     const secs = Math.floor(this.waveTimer % 60).toString().padStart(2, '0');
     document.getElementById('wave-timer').textContent = this.isBossActive ? 'SURVIVE' : `${mins}:${secs}`;
@@ -749,32 +1071,42 @@ class GameEngine {
     // 1. Spacetime Grid & Starfield Background
     this.fx.drawBackground(this.ctx);
 
-    // 2. Singularities (Event Horizons)
+    // 2. Explosive Grav Barrels
+    for (let i = 0; i < this.barrels.length; i++) {
+      this.barrels[i].draw(this.ctx);
+    }
+
+    // 3. Supply Drops
+    for (let i = 0; i < this.supplyDrops.length; i++) {
+      this.supplyDrops[i].draw(this.ctx);
+    }
+
+    // 4. Singularities (Event Horizons)
     for (let i = 0; i < this.singularities.length; i++) {
       this.singularities[i].draw(this.ctx);
     }
 
-    // 3. XP Crystals
+    // 5. XP Crystals
     for (let i = 0; i < this.crystals.length; i++) {
       this.crystals[i].draw(this.ctx);
     }
 
-    // 4. Enemies & Bosses
+    // 6. Enemies & Bosses
     for (let i = 0; i < this.enemies.length; i++) {
       this.enemies[i].draw(this.ctx);
     }
 
-    // 5. Projectiles
+    // 7. Projectiles
     for (let i = 0; i < this.projectiles.length; i++) {
       this.projectiles[i].draw(this.ctx);
     }
 
-    // 6. Player Ship
+    // 8. Player Ship
     if (this.player) {
       this.player.draw(this.ctx);
     }
 
-    // 7. Shockwaves, Floating Damage Text, Particles
+    // 9. Shockwaves, Floating Damage Text, Particles
     this.fx.drawForeground(this.ctx);
 
     // Restore Camera Shake
