@@ -1,0 +1,32 @@
+{
+  "name": "Anti-Gravity: Overdrive",
+  "short_name": "Anti-Gravity",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#070913",
+  "theme_color": "#070913",
+  "description": "Neon Cyberpunk Rogue-lite Action Game. Harness gravitational forces, deflect enemy lasers, and obliterate relentless swarms!",
+  "categories": ["games", "action", "arcade"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
